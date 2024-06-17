@@ -1,0 +1,6 @@
+discord
+d20
+python-dotenv
+pandas
+fastapi
+pydantic
