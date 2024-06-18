@@ -115,7 +115,7 @@ def process_message(message: str) -> str:
             crit = "💥"
         inline_replacement = f"`( {result.total}{crit}{comment} )` "
         message = message.replace(f"[[{inline_roll}]]", inline_replacement, 1)
-        end_text = f"{comment}: {end_text}\n{result}"
+        end_text = f"{end_text}\n{comment}: {result}"
     message = message + end_text
     return message
 
