@@ -102,21 +102,29 @@ def get_channel_id(url):
 
 def process_message(message: str) -> str:
     inline_rolls = find_inline_roll(message)
-    end_text = ""
     if len(inline_rolls) == 0:
         return message
+
     for inline_roll in inline_rolls:
         result = d20.roll(inline_roll, allow_comments=True)
-        comment = f" {result.comment}" if result.comment else ""
-        crit = ""
-        if result.crit == 2:
-            crit = "💀"
-        if result.crit == 1:
-            crit = "💥"
-        inline_replacement = f"`( {result.total}{crit}{comment} )` "
+        if result.comment:
+            inline_replacement = f"{result.comment} : {result}\n"
+        else:
+            inline_replacement = f"{result}\n"
         message = message.replace(f"[[{inline_roll}]]", inline_replacement, 1)
-        end_text = f"{end_text}\n{comment}: {result}"
-    message = message + end_text
+
+    # for inline_roll in inline_rolls:
+    #     result = d20.roll(inline_roll, allow_comments=True)
+    #     comment = f" {result.comment}" if result.comment else ""
+    #     crit = ""
+    #     if result.crit == 2:
+    #         crit = "💀"
+    #     if result.crit == 1:
+    #         crit = "💥"
+    #     inline_replacement = f"`( {result.total}{crit}{comment} )` "
+    #     message = message.replace(f"[[{inline_roll}]]", inline_replacement, 1)
+    #     end_text = f"{end_text}\n{comment}: {result}"
+    # message = message + end_text
     return message
 
 
