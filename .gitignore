@@ -176,6 +176,6 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/python
 
 # sqlite db
-database/inline_roller.db
+database/avr4e.db
 
 credentials.json

@@ -141,7 +141,7 @@ async def ping(ctx):
     await ctx.send("Pong!")
 
 
-@bot.command()
+@bot.command(aliases=["add"])
 async def add_sheet(ctx, url=""):
     spreadsheet_id = get_spreadsheet_id(url)
     if spreadsheet_id == "":
@@ -159,29 +159,56 @@ async def add_sheet(ctx, url=""):
         ctx.author.id,
         name,
         df_data.to_json(),
-        actions_data.to_json())
+        actions_data.to_json(),
+        sheet_url=url
+        )
     await ctx.send(f"Sheet `{name}` is added.", embed=embed)
 
 
-@bot.command()
+@bot.command(aliases=["update"])
+async def update_sheet(ctx, url=""):
+    charaRepo = CharacterUserMapRepository()
+    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+    url = character[3]
+    spreadsheet_id = get_spreadsheet_id(url)
+    if spreadsheet_id == "":
+        await ctx.send("Please provide a url")
+        return
+    df_data = get_df(spreadsheet_id, "data")
+    actions_data = get_df(spreadsheet_id, "actions")
+    data_dict = create_data_dict(df_data)
+    embed = create_embed(data_dict)
+
+    name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
+    charaRepo = CharacterUserMapRepository()
+    charaRepo.set_character(
+        ctx.guild.id,
+        ctx.author.id,
+        name,
+        df_data.to_json(),
+        actions_data.to_json(),
+        sheet_url=url)
+    await ctx.send(f"Sheet `{name}` is updated.", embed=embed)
+
+
+@bot.command(aliases=["sheet"])
 async def char(ctx):
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    name = character[0]
     df_data = pd.read_json(character[1])
     data_dict = create_data_dict(df_data)
     embed = create_embed(data_dict)
 
-    await ctx.send(name, embed=embed)
+    await ctx.send(embed=embed)
 
 
 @bot.command()
 async def action(ctx, *, args=None):
     await ctx.message.delete()
     charaRepo = CharacterUserMapRepository()
-    character = charaRepo.get_actions(ctx.guild.id, ctx.author.id)
+    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
     name = character[0]
-    df = pd.read_json(character[1])
+    df = pd.read_json(character[2])
     if args is None:
         embed = discord.Embed()
         embed.title = f"{name}'s Actions"
@@ -310,6 +337,7 @@ def create_embed(data_dict: dict) -> discord.Embed:
 
 def main():
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
+    # bot.run(TOKEN)
     pass
 
 

@@ -28,6 +28,7 @@ class CharacterUserMapRepository(Repository):
             character_name VARCHAR(255) NOT NULL,
             data TEXT NOT NULL,
             actions TEXT NOT NULL,
+            sheet_url TEXT NOT NULL,
             UNIQUE (guild_id, user_id)
         )""")
         self.cursor.close()
@@ -37,7 +38,9 @@ class CharacterUserMapRepository(Repository):
         query = """
         SELECT
             character_name,
-            data
+            data,
+            actions,
+            sheet_url
         FROM character_user_map
         WHERE guild_id = ? AND user_id = ?
         LIMIT 1
@@ -55,38 +58,29 @@ class CharacterUserMapRepository(Repository):
             user_id: str,
             character_name: str,
             data: str,
-            actions: str
+            actions: str,
+            sheet_url: str
             ) -> None:
         query = """
         INSERT INTO character_user_map (
-            guild_id, user_id, character_name, data, actions
+            guild_id, user_id, character_name, data, actions,
+            sheet_url
         )
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (
+            ?, ?, ?, ?, ?,
+            ?
+        )
         ON CONFLICT (guild_id, user_id)
             DO UPDATE SET
                 character_name = ?,
                 data = ?,
-                actions = ?
+                actions = ?,
+                sheet_url = ?
         """
 
         with self as db:
             db.cursor.execute(query, (
                 guild_id, user_id,
-                character_name, data, actions,
-                character_name, data, actions))
+                character_name, data, actions, sheet_url,
+                character_name, data, actions, sheet_url))
             db.connection.commit()
-
-    def get_actions(self, guild_id: str, user_id: str) -> tuple:
-        query = """
-        SELECT
-            character_name,
-            actions
-        FROM character_user_map
-        WHERE guild_id = ? AND user_id = ?
-        """
-
-        with self as db:
-            db.cursor.execute(query, (guild_id, user_id))
-            result = db.cursor.fetchone()
-
-        return result
