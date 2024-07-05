@@ -202,7 +202,7 @@ async def char(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.command()
+@bot.command(aliases=["a"])
 async def action(ctx, *, args=None):
     await ctx.message.delete()
     charaRepo = CharacterUserMapRepository()
@@ -231,6 +231,8 @@ async def action(ctx, *, args=None):
             for _, name in possible_action['Name'].items():
                 list = list + f"`{idx}. {name}`\n"
                 idx += 1
+                if idx > 10:
+                    break
 
             def followup(message):
                 return (
@@ -255,6 +257,11 @@ async def action(ctx, *, args=None):
                 await option_message.delete()
                 await followup_message.delete()
         embed = discord.Embed()
+        if possible_action['MaxUsages'].iloc[choosen] > 0 and possible_action['Usages'].iloc[choosen] <= 0:
+            embed.title = f"{name} cannot use {possible_action['Name'].iloc[choosen]}."
+            embed.description = "This action is on cooldown."
+            await ctx.send(embed=embed)
+            return
         embed_description = ""
         flavor = possible_action['Flavor'].iloc[choosen]
         effect = possible_action['Effect'].iloc[choosen]
