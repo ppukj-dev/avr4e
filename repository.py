@@ -37,6 +37,7 @@ class CharacterUserMapRepository(Repository):
     def get_character(self, guild_id: str, user_id: str) -> tuple:
         query = """
         SELECT
+            id,
             character_name,
             data,
             actions,
@@ -83,4 +84,17 @@ class CharacterUserMapRepository(Repository):
                 guild_id, user_id,
                 character_name, data, actions, sheet_url,
                 character_name, data, actions, sheet_url))
+            db.connection.commit()
+
+    def update_character(self, id: int, data: str, actions: str) -> None:
+        query = """
+        UPDATE character_user_map
+        SET
+            data = COALESCE(?, data),
+            actions = COALESCE(?, actions)
+        WHERE id = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (data, actions, id))
             db.connection.commit()

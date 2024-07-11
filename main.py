@@ -169,7 +169,7 @@ async def add_sheet(ctx, url=""):
 async def update_sheet(ctx, url=""):
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    url = character[3]
+    url = character[4]
     spreadsheet_id = get_spreadsheet_id(url)
     if spreadsheet_id == "":
         await ctx.send("Please provide a url")
@@ -195,7 +195,7 @@ async def update_sheet(ctx, url=""):
 async def char(ctx):
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    df_data = pd.read_json(character[1])
+    df_data = pd.read_json(character[2])
     data_dict = create_data_dict(df_data)
     embed = create_embed(data_dict)
 
@@ -207,8 +207,9 @@ async def action(ctx, *, args=None):
     await ctx.message.delete()
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    name = character[0]
-    df = pd.read_json(character[2])
+    name = character[1]
+    df = pd.read_json(character[3])
+    choosen = 0
     if args is None:
         embed = discord.Embed()
         embed.title = f"{name}'s Actions"
@@ -221,7 +222,6 @@ async def action(ctx, *, args=None):
     else:
         action = args
         possible_action = df[df['Name'].str.contains(action, na=False, case=False)]
-        choosen = 0
         if len(possible_action) <= 0:
             await ctx.send("No actions found")
             return
