@@ -202,89 +202,138 @@ async def char(ctx):
     await ctx.send(embed=embed)
 
 
+@bot.command()
+async def reset(ctx, *, args=None):
+    await ctx.message.delete()
+    charaRepo = CharacterUserMapRepository()
+    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+    actions = pd.read_json(character[3])
+    if args is None:
+        actions['Usages'] = actions['MaxUsages']
+        message = "All actions are reset."
+    else:
+        actions.loc[actions['ResetOn'] == args, 'Usages'] = actions['MaxUsages']
+        message = f"`{args}` actions are reset."
+    charaRepo.update_character(character[0], None, actions.to_json())
+    embed = discord.Embed()
+    embed.title = f"{character[1]}'s Actions"
+    description = ""
+    for i, row in actions.iterrows():
+        if row['MaxUsages'] <= 0:
+            continue
+        description += f"- **{row['Name']}** ({row['Usages']}/{row['MaxUsages']})\n"
+    embed.description = description
+    await ctx.send(message, embed=embed)
+
+
 @bot.command(aliases=["a"])
 async def action(ctx, *, args=None):
     await ctx.message.delete()
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+    sheet_id = character[0]
     name = character[1]
-    df = pd.read_json(character[3])
-    choosen = 0
+    actions = pd.read_json(character[3])
     if args is None:
-        embed = discord.Embed()
-        embed.title = f"{name}'s Actions"
-        for type1 in df['Type1'].unique().tolist():
-            description = ""
-            for i, row in df[df['Type1'] == type1].iterrows():
-                description += f"- **{row['Name']}** " + \
-                    f"({row['Type2']}). " + f"{row['ShortDesc']}\n"
-            embed.add_field(name=type1, value=description, inline=False)
+        embed = create_action_list_embed(name, actions)
     else:
-        action = args
-        possible_action = df[df['Name'].str.contains(action, na=False, case=False)]
-        if len(possible_action) <= 0:
-            await ctx.send("No actions found")
-            return
-        elif len(possible_action) > 1:
-            idx = 1
-            list = ""
-            for _, name in possible_action['Name'].items():
-                list = list + f"`{idx}. {name}`\n"
-                idx += 1
-                if idx > 10:
-                    break
-
-            def followup(message):
-                return (
-                    message.content.isnumeric() or message.content == "c"
-                ) and message.author == ctx.message.author
-
-            description = """Do you mean?\n{}""".format(list)
-            embed = discord.Embed(title="Multiple Found", description=description)
-            embed.set_footer(text="Type 1-10 to choose, or c to cancel.")
-            option_message = await ctx.send(embed=embed)
-            try:
-                followup_message = await bot.wait_for(
-                    "message", timeout=60.0, check=followup
-                )
-            except asyncio.TimeoutError:
-                await option_message.delete()
-                await ctx.send("Time Out")
-            else:
-                if followup_message.content == "c":
-                    return
-                choosen = int(followup_message.content) - 1
-                await option_message.delete()
-                await followup_message.delete()
-        embed = discord.Embed()
-        if possible_action['MaxUsages'].iloc[choosen] > 0 and possible_action['Usages'].iloc[choosen] <= 0:
-            embed.title = f"{name} cannot use {possible_action['Name'].iloc[choosen]}."
-            embed.description = "This action is on cooldown."
-            await ctx.send(embed=embed)
-            return
-        embed_description = ""
-        flavor = possible_action['Flavor'].iloc[choosen]
-        effect = possible_action['Effect'].iloc[choosen]
-        to_hit = possible_action['To Hit'].iloc[choosen]
-        damage = possible_action['Damage'].iloc[choosen]
-        image = possible_action['Image'].iloc[choosen]
-        action_name = possible_action['Name'].iloc[choosen]
-        embed.title = f"{name} uses {action_name}!"
-        if to_hit:
-            hit_result = d20.roll(to_hit)
-            embed_description += f"**Hit**: {hit_result}\n"
-        if damage:
-            damage_result = d20.roll(damage)
-            embed_description += f"**Damage**: {damage_result}\n"
-        if flavor:
-            embed.add_field(name="Description", value=flavor, inline=False)
-        if effect:
-            embed.add_field(name="Effect", value=effect, inline=False)
-        if image:
-            embed.set_image(url=image)
-        embed.description = embed_description
-
+        embed = await handle_action(args, actions, ctx, name, sheet_id)
     await ctx.send(embed=embed)
+
+
+def create_action_list_embed(name, df):
+    embed = discord.Embed()
+    embed.title = f"{name}'s Actions"
+    for type1 in df['Type1'].unique().tolist():
+        description = ""
+        for i, row in df[df['Type1'] == type1].iterrows():
+            usages = ""
+            if row['MaxUsages'] > 0:
+                usages = f" ({row['Usages']}/{row['MaxUsages']})"
+            description += f"- **{row['Name']}** ({row['Type2']}). {row['ShortDesc']}{usages}\n"
+        embed.add_field(name=type1, value=description, inline=False)
+    return embed
+
+
+async def handle_action(action, df, ctx, name, sheet_id):
+    possible_action = df[df['Name'].str.contains(action, na=False, case=False)]
+    if len(possible_action) <= 0:
+        await ctx.send("No actions found")
+        return None
+    elif len(possible_action) > 1:
+        choosen = await get_user_choice(possible_action, ctx)
+        if choosen is None:
+            return None
+    else:
+        choosen = 0
+    if possible_action['MaxUsages'].iloc[choosen] > 0:
+        action_name = possible_action['Name'].iloc[choosen]
+        df.loc[df['Name'] == action_name, 'Usages'] = df.loc[df['Name'] == action_name, 'Usages'] - 1
+        charaRepo = CharacterUserMapRepository()
+        charaRepo.update_character(sheet_id, None, df.to_json())
+    return create_action_result_embed(possible_action, choosen, name)
+
+
+async def get_user_choice(possible_action, ctx):
+    idx = 1
+    list = ""
+    for _, name in possible_action['Name'].items():
+        list += f"`{idx}. {name}`\n"
+        idx += 1
+        if idx > 10:
+            break
+    embed = discord.Embed(title="Multiple Found", description=f"Do you mean?\n{list}")
+    embed.set_footer(text="Type 1-10 to choose, or c to cancel.")
+    option_message = await ctx.send(embed=embed)
+
+    def followup(message):
+        return (message.content.isnumeric() or message.content == "c") and message.author == ctx.message.author
+    try:
+        followup_message = await bot.wait_for("message", timeout=60.0, check=followup)
+    except asyncio.TimeoutError:
+        await option_message.delete()
+        await ctx.send("Time Out")
+        return None
+    else:
+        if followup_message.content == "c":
+            return None
+        choosen = int(followup_message.content) - 1
+        await option_message.delete()
+        await followup_message.delete()
+        return choosen
+
+
+def create_action_result_embed(possible_action, choosen, name):
+    embed = discord.Embed()
+    if possible_action['MaxUsages'].iloc[choosen] > 0 and possible_action['Usages'].iloc[choosen] <= 0:
+        embed.title = f"{name} cannot use {possible_action['Name'].iloc[choosen]}."
+        embed.description = "This action is on cooldown."
+        return embed
+
+    embed_description = ""
+    flavor = possible_action['Flavor'].iloc[choosen]
+    effect = possible_action['Effect'].iloc[choosen]
+    to_hit = possible_action['To Hit'].iloc[choosen]
+    damage = possible_action['Damage'].iloc[choosen]
+    image = possible_action['Image'].iloc[choosen]
+    action_name = possible_action['Name'].iloc[choosen]
+
+    embed.title = f"{name} uses {action_name}!"
+    if to_hit:
+        hit_result = d20.roll(to_hit)
+        embed_description += f"**Hit**: {hit_result}\n"
+    if damage:
+        damage_result = d20.roll(damage)
+        embed_description += f"**Damage**: {damage_result}\n"
+    if flavor:
+        embed.add_field(name="Description", value=flavor, inline=False)
+    if effect:
+        embed.add_field(name="Effect", value=effect, inline=False)
+    if image:
+        embed.set_image(url=image)
+
+    embed.description = embed_description
+    return embed
 
 
 def get_spreadsheet_id(url):
