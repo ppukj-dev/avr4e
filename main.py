@@ -261,7 +261,7 @@ async def handle_action(action, df, ctx, name, sheet_id):
         await ctx.send("No actions found")
         return None
     elif len(possible_action) > 1:
-        choosen = await get_user_choice(possible_action, ctx)
+        choosen = await get_user_choice(possible_action, 'Name', ctx)
         if choosen is None:
             return None
     else:
@@ -274,10 +274,10 @@ async def handle_action(action, df, ctx, name, sheet_id):
     return create_action_result_embed(possible_action, choosen, name)
 
 
-async def get_user_choice(possible_action, ctx):
+async def get_user_choice(choices, column_name, ctx):
     idx = 1
     list = ""
-    for _, name in possible_action['Name'].items():
+    for _, name in choices[column_name].items():
         list += f"`{idx}. {name}`\n"
         idx += 1
         if idx > 10:
@@ -316,12 +316,16 @@ def create_action_result_embed(possible_action, choosen, name):
     to_hit = possible_action['To Hit'].iloc[choosen]
     damage = possible_action['Damage'].iloc[choosen]
     image = possible_action['Image'].iloc[choosen]
+    def_target = possible_action['DefTarget'].iloc[choosen]
     action_name = possible_action['Name'].iloc[choosen]
 
     embed.title = f"{name} uses {action_name}!"
+    hit_description = "To Hit"
+    if def_target:
+        hit_description = f"To Hit vs {def_target}"
     if to_hit:
         hit_result = d20.roll(to_hit)
-        embed_description += f"**Hit**: {hit_result}\n"
+        embed_description += f"**{hit_description}**: {hit_result}\n"
     if damage:
         damage_result = d20.roll(damage)
         embed_description += f"**Damage**: {damage_result}\n"
@@ -334,6 +338,47 @@ def create_action_result_embed(possible_action, choosen, name):
 
     embed.description = embed_description
     return embed
+
+
+@bot.command(aliases=["c"])
+async def check(ctx, *, args=None):
+    await ctx.message.delete()
+    if args is None:
+        await ctx.send("Please specify check to roll.")
+        return
+    charaRepo = CharacterUserMapRepository()
+    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+    sheet_id = character[0]
+    name = character[1]
+    data = pd.read_json(character[2])
+    embed = await handle_check(args, data, ctx, name)
+    await ctx.send(embed=embed)
+
+
+def create_check_result_embed(possible_check, choosen, name):
+    embed = discord.Embed()
+    modifier = possible_check['value'].iloc[choosen]
+    check_name = possible_check['field_name'].iloc[choosen]
+
+    embed.title = f"{name} makes {check_name} check!"
+    check_result = d20.roll("1d20" + format_number(modifier))
+    embed.description = f"{check_result}"
+    return embed
+
+
+async def handle_check(check, df, ctx, name):
+    rollable_check = df[df['is_rollable'] == 'TRUE']
+    possible_check = rollable_check[rollable_check['field_name'].str.contains(check, case=False)]
+    if len(possible_check) <= 0:
+        await ctx.send("No such check found.")
+        return None
+    elif len(possible_check) > 1:
+        choosen = await get_user_choice(possible_check, 'field_name', ctx)
+        if choosen is None:
+            return None
+    else:
+        choosen = 0
+    return create_check_result_embed(possible_check, choosen, name)
 
 
 def get_spreadsheet_id(url):
@@ -366,11 +411,15 @@ def create_data_dict(df) -> dict:
         category = row['category']
         field_name = row['field_name']
         value = row['value']
+        is_rollable = row['is_rollable'] == 'TRUE'
 
         if category not in result:
             result[category] = {}
 
-        result[category][field_name] = value
+        if is_rollable:
+            result[category][field_name] = format_number(value)
+        else:
+            result[category][field_name] = value
     return result
 
 
@@ -386,9 +435,26 @@ def create_embed(data_dict: dict) -> discord.Embed:
             continue
         field_value = ''
         for field_name, value in fields.items():
+            if is_formatted_number(str(value)):
+                field_value = field_value + f"{field_name} {value}, "
+                continue
             field_value = field_value + f"**{field_name}**: {value}\n"
-        embed.add_field(name=category, value=field_value, inline=True)
+        field_value = field_value.rstrip(", ")
+        field_value = field_value.rstrip()
+        embed.add_field(name=category, value=field_value, inline=False)
     return embed
+
+
+def format_number(value) -> str:
+    if int(value) >= 0:
+        return f"+{value}"
+    else:
+        return f"{value}"
+
+
+def is_formatted_number(string):
+    pattern = r'^[+-]\d+$'
+    return bool(re.match(pattern, string))
 
 
 def main():
