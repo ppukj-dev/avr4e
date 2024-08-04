@@ -5,11 +5,14 @@ import re
 import os
 import d20
 import gspread
+import shlex
+import argparse
 import json
 import uvicorn
 from discord.ext import commands
 from repository import CharacterUserMapRepository
 from pydantic import BaseModel
+from pydantic.dataclasses import dataclass
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -49,7 +52,6 @@ class Roll(BaseModel):
     message: str
     username: str
     dump_channel_link: str
-    
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -61,6 +63,15 @@ class Roll(BaseModel):
             ]
         }
     }
+
+
+@dataclass
+class ActionParam():
+    name: str = ""
+    damage_bonus: str = ""
+    to_hit_bonus: str = ""
+    is_adv: bool = False
+    is_dis: bool = False
 
 
 @app.post("/roll")
@@ -228,7 +239,6 @@ async def reset(ctx, *, args=None):
 
 @bot.command(aliases=["a"])
 async def action(ctx, *, args=None):
-    await ctx.message.delete()
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
     sheet_id = character[0]
@@ -255,8 +265,9 @@ def create_action_list_embed(name, df):
     return embed
 
 
-async def handle_action(action, df, ctx, name, sheet_id):
-    possible_action = df[df['Name'].str.contains(action, na=False, case=False)]
+async def handle_action(command, df, ctx, name, sheet_id):
+    ap = parse_command(command)
+    possible_action = df[df['Name'].str.contains(ap.name, na=False, case=False)]
     if len(possible_action) <= 0:
         await ctx.send("No actions found")
         return None
@@ -271,7 +282,40 @@ async def handle_action(action, df, ctx, name, sheet_id):
         df.loc[df['Name'] == action_name, 'Usages'] = df.loc[df['Name'] == action_name, 'Usages'] - 1
         charaRepo = CharacterUserMapRepository()
         charaRepo.update_character(sheet_id, None, df.to_json())
-    return create_action_result_embed(possible_action, choosen, name)
+    return create_action_result_embed(possible_action, choosen, name, ap)
+
+
+def parse_command(message) -> ActionParam:
+    # dumb things so negative value in args can be done
+    parser = argparse.ArgumentParser(prefix_chars='@@')
+    message = message.replace(' -b', ' @@b')
+    message = message.replace(' -d', ' @@d')
+    message = re.sub(r'\badv\b', ' @@adv', message)
+    message = re.sub(r'\bdis\b', ' @@dis', message)
+
+    parser.add_argument('move', type=str, help='The move name')
+    parser.add_argument('@@b', type=str)
+    parser.add_argument('@@d', type=str)
+    parser.add_argument('@@adv', nargs='?', const=True, default=False)
+    parser.add_argument('@@dis', nargs='?', const=True, default=False)
+
+    args = parser.parse_args(shlex.split(message))
+
+    action = args.move
+    to_hit_bonus = format_bonus(args.b) if args.b is not None else ""
+    damage_bonus = format_bonus(args.d) if args.d is not None else ""
+    is_adv = args.adv is not False
+    is_dis = args.dis is not False
+
+    param = ActionParam(
+        name=action,
+        damage_bonus=damage_bonus,
+        to_hit_bonus=to_hit_bonus,
+        is_adv=is_adv,
+        is_dis=is_dis
+    )
+
+    return param
 
 
 async def get_user_choice(choices, column_name, ctx):
@@ -303,13 +347,12 @@ async def get_user_choice(choices, column_name, ctx):
         return choosen
 
 
-def create_action_result_embed(possible_action, choosen, name):
+def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
     embed = discord.Embed()
     if possible_action['MaxUsages'].iloc[choosen] > 0 and possible_action['Usages'].iloc[choosen] <= 0:
         embed.title = f"{name} cannot use {possible_action['Name'].iloc[choosen]}."
         embed.description = "This action is on cooldown."
         return embed
-
     embed_description = ""
     flavor = possible_action['Flavor'].iloc[choosen]
     effect = possible_action['Effect'].iloc[choosen]
@@ -324,10 +367,18 @@ def create_action_result_embed(possible_action, choosen, name):
     if def_target:
         hit_description = f"To Hit vs {def_target}"
     if to_hit:
-        hit_result = d20.roll(to_hit)
+        if to_hit[0] == "d":
+            to_hit = "1"+to_hit
+        if ap.is_adv and ap.is_dis:
+            pass
+        elif ap.is_adv:
+            to_hit = to_hit.replace("1d20", "2d20kh1")
+        elif ap.is_dis:
+            to_hit = to_hit.replace("1d20", "2d20kl1")
+        hit_result = d20.roll(to_hit + ap.to_hit_bonus)
         embed_description += f"**{hit_description}**: {hit_result}\n"
     if damage:
-        damage_result = d20.roll(damage)
+        damage_result = d20.roll(damage + ap.damage_bonus)
         embed_description += f"**Damage**: {damage_result}\n"
     if flavor:
         embed.add_field(name="Description", value=flavor, inline=False)
@@ -452,14 +503,23 @@ def format_number(value) -> str:
         return f"{value}"
 
 
+def format_bonus(value: str) -> str:
+    if len(value) == 0:
+        return ""
+    if value[0] == "+" or value[0] == "-":
+        return value
+    else:
+        return "+" + value
+
+
 def is_formatted_number(string):
     pattern = r'^[+-]\d+$'
     return bool(re.match(pattern, string))
 
 
 def main():
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
-    # bot.run(TOKEN)
+    # uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
+    bot.run(TOKEN)
     pass
 
 
