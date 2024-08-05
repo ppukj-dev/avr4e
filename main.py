@@ -12,10 +12,11 @@ import uvicorn
 from discord.ext import commands
 from repository import CharacterUserMapRepository
 from pydantic import BaseModel
-from pydantic.dataclasses import dataclass
+from pydantic.dataclasses import dataclass, Field
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from typing import List
 
 
 load_dotenv()
@@ -72,6 +73,7 @@ class ActionParam():
     to_hit_bonus: str = ""
     is_adv: bool = False
     is_dis: bool = False
+    targets: List[str] = Field(default_factory=list)
 
 
 @app.post("/roll")
@@ -288,16 +290,19 @@ async def handle_action(command, df, ctx, name, sheet_id):
 def parse_command(message) -> ActionParam:
     # dumb things so negative value in args can be done
     parser = argparse.ArgumentParser(prefix_chars='@@')
+    message = message.replace('@@', '')
     message = message.replace(' -b', ' @@b')
     message = message.replace(' -d', ' @@d')
     message = re.sub(r'\badv\b', ' @@adv', message)
     message = re.sub(r'\bdis\b', ' @@dis', message)
+    message = message.replace(' -t', ' @@t')
 
     parser.add_argument('move', type=str, help='The move name')
     parser.add_argument('@@b', type=str)
     parser.add_argument('@@d', type=str)
     parser.add_argument('@@adv', nargs='?', const=True, default=False)
     parser.add_argument('@@dis', nargs='?', const=True, default=False)
+    parser.add_argument('@@t', type=str, action='append')
 
     args = parser.parse_args(shlex.split(message))
 
@@ -306,13 +311,15 @@ def parse_command(message) -> ActionParam:
     damage_bonus = format_bonus(args.d) if args.d is not None else ""
     is_adv = args.adv is not False
     is_dis = args.dis is not False
+    targets = args.t if args.t is not None else []
 
     param = ActionParam(
         name=action,
         damage_bonus=damage_bonus,
         to_hit_bonus=to_hit_bonus,
         is_adv=is_adv,
-        is_dis=is_dis
+        is_dis=is_dis,
+        targets=targets
     )
 
     return param
@@ -366,20 +373,38 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
     hit_description = "To Hit"
     if def_target:
         hit_description = f"To Hit vs {def_target}"
-    if to_hit:
-        if to_hit[0] == "d":
-            to_hit = "1"+to_hit
-        if ap.is_adv and ap.is_dis:
-            pass
-        elif ap.is_adv:
-            to_hit = to_hit.replace("1d20", "2d20kh1")
-        elif ap.is_dis:
-            to_hit = to_hit.replace("1d20", "2d20kl1")
-        hit_result = d20.roll(to_hit + ap.to_hit_bonus)
-        embed_description += f"**{hit_description}**: {hit_result}\n"
-    if damage:
-        damage_result = d20.roll(damage + ap.damage_bonus)
-        embed_description += f"**Damage**: {damage_result}\n"
+    if len(ap.targets) > 0:
+        for target in ap.targets:
+            embed_description += f"**{target}**\n"
+            if to_hit:
+                if to_hit[0] == "d":
+                    to_hit = "1"+to_hit
+                if ap.is_adv and ap.is_dis:
+                    pass
+                elif ap.is_adv:
+                    to_hit = to_hit.replace("1d20", "2d20kh1")
+                elif ap.is_dis:
+                    to_hit = to_hit.replace("1d20", "2d20kl1")
+                hit_result = d20.roll(to_hit + ap.to_hit_bonus)
+                embed_description += f"**{hit_description}**: {hit_result}\n"
+            if damage:
+                damage_result = d20.roll(damage + ap.damage_bonus)
+                embed_description += f"**Damage**: {damage_result}\n"
+    else:
+        if to_hit:
+            if to_hit[0] == "d":
+                to_hit = "1"+to_hit
+            if ap.is_adv and ap.is_dis:
+                pass
+            elif ap.is_adv:
+                to_hit = to_hit.replace("1d20", "2d20kh1")
+            elif ap.is_dis:
+                to_hit = to_hit.replace("1d20", "2d20kl1")
+            hit_result = d20.roll(to_hit + ap.to_hit_bonus)
+            embed_description += f"**{hit_description}**: {hit_result}\n"
+        if damage:
+            damage_result = d20.roll(damage + ap.damage_bonus)
+            embed_description += f"**Damage**: {damage_result}\n"
     if flavor:
         embed.add_field(name="Description", value=flavor, inline=False)
     if effect:
