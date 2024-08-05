@@ -70,7 +70,7 @@ class Roll(BaseModel):
 class ActionParam():
     name: str = ""
     damage_bonus: str = ""
-    to_hit_bonus: str = ""
+    d20_bonus: str = ""
     is_adv: bool = False
     is_dis: bool = False
     targets: List[str] = Field(default_factory=list)
@@ -307,7 +307,7 @@ def parse_command(message) -> ActionParam:
     args = parser.parse_args(shlex.split(message))
 
     action = args.move
-    to_hit_bonus = format_bonus(args.b) if args.b is not None else ""
+    d20_bonus = format_bonus(args.b) if args.b is not None else ""
     damage_bonus = format_bonus(args.d) if args.d is not None else ""
     is_adv = args.adv is not False
     is_dis = args.dis is not False
@@ -316,7 +316,7 @@ def parse_command(message) -> ActionParam:
     param = ActionParam(
         name=action,
         damage_bonus=damage_bonus,
-        to_hit_bonus=to_hit_bonus,
+        d20_bonus=d20_bonus,
         is_adv=is_adv,
         is_dis=is_dis,
         targets=targets
@@ -385,7 +385,7 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
                     to_hit = to_hit.replace("1d20", "2d20kh1")
                 elif ap.is_dis:
                     to_hit = to_hit.replace("1d20", "2d20kl1")
-                hit_result = d20.roll(to_hit + ap.to_hit_bonus)
+                hit_result = d20.roll(to_hit + ap.d20_bonus)
                 embed_description += f"**{hit_description}**: {hit_result}\n"
             if damage:
                 damage_result = d20.roll(damage + ap.damage_bonus)
@@ -400,7 +400,7 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
                 to_hit = to_hit.replace("1d20", "2d20kh1")
             elif ap.is_dis:
                 to_hit = to_hit.replace("1d20", "2d20kl1")
-            hit_result = d20.roll(to_hit + ap.to_hit_bonus)
+            hit_result = d20.roll(to_hit + ap.d20_bonus)
             embed_description += f"**{hit_description}**: {hit_result}\n"
         if damage:
             damage_result = d20.roll(damage + ap.damage_bonus)
@@ -418,7 +418,6 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
 
 @bot.command(aliases=["c"])
 async def check(ctx, *, args=None):
-    await ctx.message.delete()
     if args is None:
         await ctx.send("Please specify check to roll.")
         return
@@ -431,20 +430,28 @@ async def check(ctx, *, args=None):
     await ctx.send(embed=embed)
 
 
-def create_check_result_embed(possible_check, choosen, name):
+def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
     embed = discord.Embed()
     modifier = possible_check['value'].iloc[choosen]
     check_name = possible_check['field_name'].iloc[choosen]
 
     embed.title = f"{name} makes {check_name} check!"
-    check_result = d20.roll("1d20" + format_number(modifier))
+    dice = ""
+    if ap.is_adv and ap.is_dis:
+        dice = "1d20"
+    elif ap.is_adv:
+        dice = "2d20kh1"
+    elif ap.is_dis:
+        dice = "2d20kl1"
+    check_result = d20.roll(dice + format_number(modifier) + ap.d20_bonus)
     embed.description = f"{check_result}"
     return embed
 
 
-async def handle_check(check, df, ctx, name):
+async def handle_check(command, df, ctx, name):
+    ap = parse_command(command)
     rollable_check = df[df['is_rollable'] == 'TRUE']
-    possible_check = rollable_check[rollable_check['field_name'].str.contains(check, case=False)]
+    possible_check = rollable_check[rollable_check['field_name'].str.contains(ap.name, case=False)]
     if len(possible_check) <= 0:
         await ctx.send("No such check found.")
         return None
@@ -454,7 +461,7 @@ async def handle_check(check, df, ctx, name):
             return None
     else:
         choosen = 0
-    return create_check_result_embed(possible_check, choosen, name)
+    return create_check_result_embed(possible_check, choosen, name, ap)
 
 
 def get_spreadsheet_id(url):
