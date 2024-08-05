@@ -217,42 +217,48 @@ async def char(ctx):
 
 @bot.command()
 async def reset(ctx, *, args=None):
-    await ctx.message.delete()
-    charaRepo = CharacterUserMapRepository()
-    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    actions = pd.read_json(character[3])
-    if args is None:
-        actions['Usages'] = actions['MaxUsages']
-        message = "All actions are reset."
-    else:
-        actions.loc[actions['ResetOn'] == args, 'Usages'] = actions['MaxUsages']
-        message = f"`{args}` actions are reset."
-    charaRepo.update_character(character[0], None, actions.to_json())
-    embed = discord.Embed()
-    embed.title = f"{character[1]}'s Actions"
-    description = ""
-    for i, row in actions.iterrows():
-        if row['MaxUsages'] <= 0:
-            continue
-        description += f"- **{row['Name']}** ({row['Usages']}/{row['MaxUsages']})\n"
-    embed.description = description
-    await ctx.send(message, embed=embed)
+    try:
+        await ctx.message.delete()
+        charaRepo = CharacterUserMapRepository()
+        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        actions = pd.read_json(character[3])
+        if args is None:
+            actions['Usages'] = actions['MaxUsages']
+            message = "All actions are reset."
+        else:
+            actions.loc[actions['ResetOn'] == args, 'Usages'] = actions['MaxUsages']
+            message = f"`{args}` actions are reset."
+        charaRepo.update_character(character[0], None, actions.to_json())
+        embed = discord.Embed()
+        embed.title = f"{character[1]}'s Actions"
+        description = ""
+        for i, row in actions.iterrows():
+            if row['MaxUsages'] <= 0:
+                continue
+            description += f"- **{row['Name']}** ({row['Usages']}/{row['MaxUsages']})\n"
+        embed.description = description
+        await ctx.send(message, embed=embed)
+    except Exception:
+        await ctx.send("Error. Please check input again.")
 
 
 @bot.command(aliases=["a"])
 async def action(ctx, *, args=None):
-    await ctx.message.delete()
-    charaRepo = CharacterUserMapRepository()
-    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    sheet_id = character[0]
-    name = character[1]
-    actions = pd.read_json(character[3])
-    if args is None:
-        embed = create_action_list_embed(name, actions)
-    else:
-        args = translate_cvar(args, character[2])
-        embed = await handle_action(args, actions, ctx, name, sheet_id)
-    await ctx.send(embed=embed)
+    try:
+        await ctx.message.delete()
+        charaRepo = CharacterUserMapRepository()
+        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        sheet_id = character[0]
+        name = character[1]
+        actions = pd.read_json(character[3])
+        if args is None:
+            embed = create_action_list_embed(name, actions)
+        else:
+            args = translate_cvar(args, character[2])
+            embed = await handle_action(args, actions, ctx, name, sheet_id)
+        await ctx.send(embed=embed)
+    except Exception:
+        await ctx.send("Error. Please check input again.")
 
 
 def create_action_list_embed(name, df):
@@ -431,17 +437,20 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
 
 @bot.command(aliases=["c"])
 async def check(ctx, *, args=None):
-    await ctx.message.delete()
-    if args is None:
-        await ctx.send("Please specify check to roll.")
-        return
-    charaRepo = CharacterUserMapRepository()
-    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    sheet_id = character[0]
-    name = character[1]
-    data = pd.read_json(character[2])
-    embed = await handle_check(args, data, ctx, name)
-    await ctx.send(embed=embed)
+    try:
+        await ctx.message.delete()
+        if args is None:
+            await ctx.send("Please specify check to roll.")
+            return
+        charaRepo = CharacterUserMapRepository()
+        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        # sheet_id = character[0]
+        name = character[1]
+        data = pd.read_json(character[2])
+        embed = await handle_check(args, data, ctx, name)
+        await ctx.send(embed=embed)
+    except Exception:
+        await ctx.send("Error. Please check input again.")
 
 
 def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
