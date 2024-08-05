@@ -241,6 +241,7 @@ async def reset(ctx, *, args=None):
 
 @bot.command(aliases=["a"])
 async def action(ctx, *, args=None):
+    await ctx.message.delete()
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
     sheet_id = character[0]
@@ -249,6 +250,7 @@ async def action(ctx, *, args=None):
     if args is None:
         embed = create_action_list_embed(name, actions)
     else:
+        args = translate_cvar(args, character[2])
         embed = await handle_action(args, actions, ctx, name, sheet_id)
     await ctx.send(embed=embed)
 
@@ -323,6 +325,17 @@ def parse_command(message) -> ActionParam:
     )
 
     return param
+
+
+def translate_cvar(message, data):
+    df = pd.read_json(data)
+    cvar = df[df['category'] == 'CVAR']
+    for _, row in cvar.iterrows():
+        if row["field_name"] in ["adv", "dis", "-t", "-b", "-d"]:
+            continue
+        replaceable = fr"\b{re.escape(row['field_name'])}\b"
+        message = re.sub(replaceable, str(row["value"]), message)
+    return message
 
 
 async def get_user_choice(choices, column_name, ctx):
@@ -418,6 +431,7 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
 
 @bot.command(aliases=["c"])
 async def check(ctx, *, args=None):
+    await ctx.message.delete()
     if args is None:
         await ctx.send("Please specify check to roll.")
         return
@@ -516,6 +530,8 @@ def create_embed(data_dict: dict) -> discord.Embed:
             embed.set_thumbnail(url=fields['Thumbnail'])
             embed.set_image(url=fields['Image'])
             continue
+        if category == "CVAR":
+            continue
         field_value = ''
         for field_name, value in fields.items():
             if is_formatted_number(str(value)):
@@ -550,8 +566,8 @@ def is_formatted_number(string):
 
 
 def main():
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
-    # bot.run(TOKEN)
+    # uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
+    bot.run(TOKEN)
     pass
 
 
