@@ -436,9 +436,9 @@ def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
     check_name = possible_check['field_name'].iloc[choosen]
 
     embed.title = f"{name} makes {check_name} check!"
-    dice = ""
+    dice = "1d20"
     if ap.is_adv and ap.is_dis:
-        dice = "1d20"
+        pass
     elif ap.is_adv:
         dice = "2d20kh1"
     elif ap.is_dis:
