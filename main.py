@@ -53,14 +53,15 @@ class Roll(BaseModel):
     message: str
     username: str
     dump_channel_link: str
+    example1 = {
+        "message": "[[d20 vs ac a]][[1d8+0]]\nHmmm",
+        "username": "aremiru",
+        "dump_channel_link": "https://discord.com/channels/1234/1234"
+    }
     model_config = {
         "json_schema_extra": {
             "examples": [
-                {
-                    "message": "[[d20 vs ac a]][[1d8+0]]\nHmmm",
-                    "username": "aremiru",
-                    "dump_channel_link": "https://discord.com/channels/1226890887443906561/1236547275786944542"
-                }
+                
             ]
         }
     }
@@ -128,19 +129,6 @@ def process_message(message: str) -> str:
         else:
             inline_replacement = f"{result}\n"
         message = message.replace(f"[[{inline_roll}]]", inline_replacement, 1)
-
-    # for inline_roll in inline_rolls:
-    #     result = d20.roll(inline_roll, allow_comments=True)
-    #     comment = f" {result.comment}" if result.comment else ""
-    #     crit = ""
-    #     if result.crit == 2:
-    #         crit = "💀"
-    #     if result.crit == 1:
-    #         crit = "💥"
-    #     inline_replacement = f"`( {result.total}{crit}{comment} )` "
-    #     message = message.replace(f"[[{inline_roll}]]", inline_replacement, 1)
-    #     end_text = f"{end_text}\n{comment}: {result}"
-    # message = message + end_text
     return message
 
 
@@ -226,7 +214,8 @@ async def reset(ctx, *, args=None):
             actions['Usages'] = actions['MaxUsages']
             message = "All actions are reset."
         else:
-            actions.loc[actions['ResetOn'] == args, 'Usages'] = actions['MaxUsages']
+            max_usages = actions['MaxUsages']
+            actions.loc[actions['ResetOn'] == args, 'Usages'] = max_usages
             message = f"`{args}` actions are reset."
         charaRepo.update_character(character[0], None, actions.to_json())
         embed = discord.Embed()
@@ -235,10 +224,12 @@ async def reset(ctx, *, args=None):
         for i, row in actions.iterrows():
             if row['MaxUsages'] <= 0:
                 continue
-            description += f"- **{row['Name']}** ({row['Usages']}/{row['MaxUsages']})\n"
+            usages_quota = f"({row['Usages']}/{row['MaxUsages']})"
+            description += f"- **{row['Name']}** {usages_quota}\n"
         embed.description = description
         await ctx.send(message, embed=embed)
-    except Exception:
+    except Exception as e:
+        print(e)
         await ctx.send("Error. Please check input again.")
 
 
@@ -257,7 +248,8 @@ async def action(ctx, *, args=None):
             args = translate_cvar(args, character[2])
             embed = await handle_action(args, actions, ctx, name, sheet_id)
         await ctx.send(embed=embed)
-    except Exception:
+    except Exception as e:
+        print(e)
         await ctx.send("Error. Please check input again.")
 
 
@@ -270,14 +262,19 @@ def create_action_list_embed(name, df):
             usages = ""
             if row['MaxUsages'] > 0:
                 usages = f" ({row['Usages']}/{row['MaxUsages']})"
-            description += f"- **{row['Name']}** ({row['Type2']}). {row['ShortDesc']}{usages}\n"
+            description += f"- **{row['Name']}** ({row['Type2']})."
+            description += f" {row['ShortDesc']}{usages}\n"
         embed.add_field(name=type1, value=description, inline=False)
     return embed
 
 
 async def handle_action(command, df, ctx, name, sheet_id):
     ap = parse_command(command)
-    possible_action = df[df['Name'].str.contains(ap.name, na=False, case=False)]
+    possible_action = df[df['Name'].str.contains(
+        ap.name,
+        na=False,
+        case=False
+        )]
     if len(possible_action) <= 0:
         await ctx.send("No actions found")
         return None
@@ -289,7 +286,9 @@ async def handle_action(command, df, ctx, name, sheet_id):
         choosen = 0
     if possible_action['MaxUsages'].iloc[choosen] > 0:
         action_name = possible_action['Name'].iloc[choosen]
-        df.loc[df['Name'] == action_name, 'Usages'] = df.loc[df['Name'] == action_name, 'Usages'] - 1
+        usages = df.loc[df['Name'] == action_name, 'Usages'].iloc[0]
+        new_usages = usages - 1 if usages > 0 else 0
+        df.loc[df['Name'] == action_name, 'Usages'] = new_usages
         charaRepo = CharacterUserMapRepository()
         charaRepo.update_character(sheet_id, None, df.to_json())
     return create_action_result_embed(possible_action, choosen, name, ap)
@@ -352,14 +351,21 @@ async def get_user_choice(choices, column_name, ctx):
         idx += 1
         if idx > 10:
             break
-    embed = discord.Embed(title="Multiple Found", description=f"Do you mean?\n{list}")
+    embed = discord.Embed(
+            title="Multiple Found",
+            description=f"Do you mean?\n{list}"
+        )
     embed.set_footer(text="Type 1-10 to choose, or c to cancel.")
     option_message = await ctx.send(embed=embed)
 
     def followup(message):
-        return (message.content.isnumeric() or message.content == "c") and message.author == ctx.message.author
+        return (
+            message.content.isnumeric() or message.content == "c"
+            ) and message.author == ctx.message.author
     try:
-        followup_message = await bot.wait_for("message", timeout=60.0, check=followup)
+        followup_message = await bot.wait_for(
+                "message", timeout=60.0, check=followup
+            )
     except asyncio.TimeoutError:
         await option_message.delete()
         await ctx.send("Time Out")
@@ -373,12 +379,12 @@ async def get_user_choice(choices, column_name, ctx):
         return choosen
 
 
-def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
+def create_action_result_embed(
+        possible_action, choosen, name, ap: ActionParam):
     embed = discord.Embed()
-    if possible_action['MaxUsages'].iloc[choosen] > 0 and possible_action['Usages'].iloc[choosen] <= 0:
-        embed.title = f"{name} cannot use {possible_action['Name'].iloc[choosen]}."
-        embed.description = "This action is on cooldown."
-        return embed
+    max_usages = possible_action['MaxUsages'].iloc[choosen]
+    usages = possible_action['Usages'].iloc[choosen]
+    action_name = possible_action['Name'].iloc[choosen]
     embed_description = ""
     flavor = possible_action['Flavor'].iloc[choosen]
     effect = possible_action['Effect'].iloc[choosen]
@@ -386,7 +392,6 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
     damage = possible_action['Damage'].iloc[choosen]
     image = possible_action['Image'].iloc[choosen]
     def_target = possible_action['DefTarget'].iloc[choosen]
-    action_name = possible_action['Name'].iloc[choosen]
 
     embed.title = f"{name} uses {action_name}!"
     hit_description = "To Hit"
@@ -430,6 +435,15 @@ def create_action_result_embed(possible_action, choosen, name, ap: ActionParam):
         embed.add_field(name="Effect", value=effect, inline=False)
     if image:
         embed.set_image(url=image)
+    if max_usages > 0:
+        increment = " (-1)"
+        usages_value = draw_quota(max_usages, usages - 1)
+        if usages <= 0:
+            embed.title = f"{name} cannot use {action_name}."
+            usages_value = draw_quota(max_usages, usages - 1)
+            increment = " (Out of Usages)"
+        usages_value += increment
+        embed.add_field(name=action_name, value=usages_value, inline=False)
 
     embed.description = embed_description
     return embed
@@ -449,7 +463,8 @@ async def check(ctx, *, args=None):
         data = pd.read_json(character[2])
         embed = await handle_check(args, data, ctx, name)
         await ctx.send(embed=embed)
-    except Exception:
+    except Exception as e:
+        print(e)
         await ctx.send("Error. Please check input again.")
 
 
@@ -474,7 +489,9 @@ def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
 async def handle_check(command, df, ctx, name):
     ap = parse_command(command)
     rollable_check = df[df['is_rollable'] == 'TRUE']
-    possible_check = rollable_check[rollable_check['field_name'].str.contains(ap.name, case=False)]
+    possible_check = rollable_check[rollable_check['field_name'].str.contains(
+        ap.name, case=False
+    )]
     if len(possible_check) <= 0:
         await ctx.send("No such check found.")
         return None
@@ -574,9 +591,16 @@ def is_formatted_number(string):
     return bool(re.match(pattern, string))
 
 
+def draw_quota(max_usages: int, usages: int) -> str:
+    used = max_usages - usages
+    if usages <= 0:
+        return max_usages * "〇"
+    return usages * "◉" + used * "〇"
+
+
 def main():
-    # uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
-    bot.run(TOKEN)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
+    # bot.run(TOKEN)
     pass
 
 
