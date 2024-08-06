@@ -61,7 +61,7 @@ class Roll(BaseModel):
     model_config = {
         "json_schema_extra": {
             "examples": [
-                
+                example1
             ]
         }
     }
