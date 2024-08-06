@@ -53,18 +53,18 @@ class Roll(BaseModel):
     message: str
     username: str
     dump_channel_link: str
-    example1 = {
-        "message": "[[d20 vs ac a]][[1d8+0]]\nHmmm",
-        "username": "aremiru",
-        "dump_channel_link": "https://discord.com/channels/1234/1234"
-    }
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                example1
-            ]
-        }
-    }
+    # example1 = {
+    #     "message": "[[d20 vs ac a]][[1d8+0]]\nHmmm",
+    #     "username": "aremiru",
+    #     "dump_channel_link": "https://discord.com/channels/1234/1234"
+    # }
+    # model_config = {
+    #     "json_schema_extra": {
+    #         "examples": [
+    #             example1
+    #         ]
+    #     }
+    # }
 
 
 @dataclass
