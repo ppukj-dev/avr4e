@@ -310,8 +310,12 @@ def parse_command(message) -> ActionParam:
     parser.add_argument('@@adv', nargs='?', const=True, default=False)
     parser.add_argument('@@dis', nargs='?', const=True, default=False)
     parser.add_argument('@@t', type=str, action='append')
-
-    args = parser.parse_args(shlex.split(message))
+    splitted_message = shlex.split(message)
+    try:
+        args = parser.parse_args(splitted_message)
+    except SystemExit as e:
+        print("Error System Exit", e)
+        return None
 
     action = args.move
     d20_bonus = format_bonus(args.b) if args.b is not None else ""
@@ -391,15 +395,24 @@ def create_action_result_embed(
     to_hit = possible_action['To Hit'].iloc[choosen]
     damage = possible_action['Damage'].iloc[choosen]
     image = possible_action['Image'].iloc[choosen]
+    range = possible_action['Range'].iloc[choosen]
     def_target = possible_action['DefTarget'].iloc[choosen]
+    meta = ""
+
+    def is_aoe(range):
+        if (
+            range.lower().find("close") != -1 or
+            range.lower().find("area") != -1
+        ):
+            return True
+        return False
 
     embed.title = f"{name} uses {action_name}!"
     hit_description = "To Hit"
     if def_target:
         hit_description = f"To Hit vs {def_target}"
     if len(ap.targets) > 0:
-        for target in ap.targets:
-            embed_description += f"**{target}**\n"
+        if is_aoe(range):
             if to_hit:
                 if to_hit[0] == "d":
                     to_hit = "1"+to_hit
@@ -410,10 +423,27 @@ def create_action_result_embed(
                 elif ap.is_dis:
                     to_hit = to_hit.replace("1d20", "2d20kl1")
                 hit_result = d20.roll(to_hit + ap.d20_bonus)
-                embed_description += f"**{hit_description}**: {hit_result}\n"
+                meta = f"**{hit_description}**: {hit_result}"        
+            if to_hit or damage:
+                embed.add_field(name="Meta", value=meta, inline=False)
+        for target in ap.targets:
+            meta = ""
+            if to_hit and not is_aoe(range):
+                if to_hit[0] == "d":
+                    to_hit = "1"+to_hit
+                if ap.is_adv and ap.is_dis:
+                    pass
+                elif ap.is_adv:
+                    to_hit = to_hit.replace("1d20", "2d20kh1")
+                elif ap.is_dis:
+                    to_hit = to_hit.replace("1d20", "2d20kl1")
+                hit_result = d20.roll(to_hit + ap.d20_bonus)
+                meta += f"**{hit_description}**: {hit_result}\n"
             if damage:
                 damage_result = d20.roll(damage + ap.damage_bonus)
-                embed_description += f"**Damage**: {damage_result}\n"
+                meta += f"**Damage**: {damage_result}\n"
+            if to_hit or damage:
+                embed.add_field(name=target, value=meta, inline=False)
     else:
         if to_hit:
             if to_hit[0] == "d":
@@ -425,10 +455,12 @@ def create_action_result_embed(
             elif ap.is_dis:
                 to_hit = to_hit.replace("1d20", "2d20kl1")
             hit_result = d20.roll(to_hit + ap.d20_bonus)
-            embed_description += f"**{hit_description}**: {hit_result}\n"
+            meta += f"**{hit_description}**: {hit_result}\n"
         if damage:
             damage_result = d20.roll(damage + ap.damage_bonus)
-            embed_description += f"**Damage**: {damage_result}\n"
+            meta += f"**Damage**: {damage_result}\n"
+        if to_hit or damage:
+            embed.add_field(name="Meta", value=meta, inline=False)
     if flavor:
         embed.add_field(name="Description", value=flavor, inline=False)
     if effect:
