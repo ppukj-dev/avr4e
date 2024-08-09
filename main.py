@@ -413,6 +413,13 @@ def create_action_result_embed(
         hit_description = f"To Hit vs {def_target}"
     if len(ap.targets) > 0:
         if is_aoe(range):
+            if damage:
+                damage_result = d20.roll(damage + ap.damage_bonus)
+                meta += f"**Damage**: {damage_result}\n"
+            if to_hit or damage:
+                embed.add_field(name="Meta", value=meta, inline=False)
+        for target in ap.targets:
+            meta = ""
             if to_hit:
                 if to_hit[0] == "d":
                     to_hit = "1"+to_hit
@@ -423,23 +430,8 @@ def create_action_result_embed(
                 elif ap.is_dis:
                     to_hit = to_hit.replace("1d20", "2d20kl1")
                 hit_result = d20.roll(to_hit + ap.d20_bonus)
-                meta = f"**{hit_description}**: {hit_result}"        
-            if to_hit or damage:
-                embed.add_field(name="Meta", value=meta, inline=False)
-        for target in ap.targets:
-            meta = ""
-            if to_hit and not is_aoe(range):
-                if to_hit[0] == "d":
-                    to_hit = "1"+to_hit
-                if ap.is_adv and ap.is_dis:
-                    pass
-                elif ap.is_adv:
-                    to_hit = to_hit.replace("1d20", "2d20kh1")
-                elif ap.is_dis:
-                    to_hit = to_hit.replace("1d20", "2d20kl1")
-                hit_result = d20.roll(to_hit + ap.d20_bonus)
                 meta += f"**{hit_description}**: {hit_result}\n"
-            if damage:
+            if damage and not is_aoe(range):
                 damage_result = d20.roll(damage + ap.damage_bonus)
                 meta += f"**Damage**: {damage_result}\n"
             if to_hit or damage:
