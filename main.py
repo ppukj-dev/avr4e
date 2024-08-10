@@ -76,6 +76,7 @@ class ActionParam():
     is_dis: bool = False
     targets: List[str] = Field(default_factory=list)
     is_halved: bool = False
+    thumbnail: str = ""
 
 
 @app.post("/roll")
@@ -242,12 +243,13 @@ async def action(ctx, *, args=None):
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
         sheet_id = character[0]
         name = character[1]
+        data = pd.read_json(character[2])
         actions = pd.read_json(character[3])
         if args is None:
             embed = create_action_list_embed(name, actions)
         else:
-            args = translate_cvar(args, character[2])
-            embed = await handle_action(args, actions, ctx, name, sheet_id)
+            args = translate_cvar(args, data)
+            embed = await handle_action(args, actions, ctx, data, sheet_id)
         await ctx.send(embed=embed)
     except Exception as e:
         print(e)
@@ -269,13 +271,15 @@ def create_action_list_embed(name, df):
     return embed
 
 
-async def handle_action(command, df, ctx, name, sheet_id):
+async def handle_action(command, df, ctx, data, sheet_id):
     ap = parse_command(command)
     possible_action = df[df['Name'].str.contains(
         ap.name,
         na=False,
         case=False
         )]
+    ap.thumbnail = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
+    name = data[data['field_name'] == 'Name']['value'].iloc[0]
     if len(possible_action) <= 0:
         await ctx.send("No actions found")
         return None
@@ -335,14 +339,14 @@ def parse_command(message) -> ActionParam:
         is_adv=is_adv,
         is_dis=is_dis,
         targets=targets,
-        is_halved=is_halved
+        is_halved=is_halved,
+        thumbnail=""
     )
 
     return param
 
 
-def translate_cvar(message, data):
-    df = pd.read_json(data)
+def translate_cvar(message, df):
     cvar = df[df['category'] == 'CVAR']
     for _, row in cvar.iterrows():
         if row["field_name"] in ["adv", "dis", "-t", "-b", "-d"]:
@@ -481,6 +485,8 @@ def create_action_result_embed(
             increment = " (Out of Usages)"
         usages_value += increment
         embed.add_field(name=action_name, value=usages_value, inline=False)
+    if ap.thumbnail:
+        embed.set_thumbnail(url=ap.thumbnail)
 
     embed.description = embed_description
     return embed
@@ -520,6 +526,8 @@ def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
         dice = "2d20kl1"
     check_result = d20.roll(dice + format_number(modifier) + ap.d20_bonus)
     embed.description = f"{check_result}"
+    if ap.thumbnail:
+        embed.set_thumbnail(url=ap.thumbnail)
     return embed
 
 
@@ -529,6 +537,7 @@ async def handle_check(command, df, ctx, name):
     possible_check = rollable_check[rollable_check['field_name'].str.contains(
         ap.name, case=False
     )]
+    ap.thumbnail = df[df['field_name'] == 'Thumbnail']['value'].iloc[0]
     if len(possible_check) <= 0:
         await ctx.send("No such check found.")
         return None
