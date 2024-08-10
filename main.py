@@ -75,6 +75,7 @@ class ActionParam():
     is_adv: bool = False
     is_dis: bool = False
     targets: List[str] = Field(default_factory=list)
+    is_halved: bool = False
 
 
 @app.post("/roll")
@@ -303,6 +304,7 @@ def parse_command(message) -> ActionParam:
     message = re.sub(r'\badv\b', ' @@adv', message)
     message = re.sub(r'\bdis\b', ' @@dis', message)
     message = message.replace(' -t', ' @@t')
+    message = message.replace(' -h', ' @@h')
 
     parser.add_argument('move', type=str, help='The move name')
     parser.add_argument('@@b', type=str)
@@ -310,6 +312,7 @@ def parse_command(message) -> ActionParam:
     parser.add_argument('@@adv', nargs='?', const=True, default=False)
     parser.add_argument('@@dis', nargs='?', const=True, default=False)
     parser.add_argument('@@t', type=str, action='append')
+    parser.add_argument('@@h', nargs='?', const=True, default=False)
     splitted_message = shlex.split(message)
     try:
         args = parser.parse_args(splitted_message)
@@ -323,6 +326,7 @@ def parse_command(message) -> ActionParam:
     is_adv = args.adv is not False
     is_dis = args.dis is not False
     targets = args.t if args.t is not None else []
+    is_halved = args.h is not False
 
     param = ActionParam(
         name=action,
@@ -330,7 +334,8 @@ def parse_command(message) -> ActionParam:
         d20_bonus=d20_bonus,
         is_adv=is_adv,
         is_dis=is_dis,
-        targets=targets
+        targets=targets,
+        is_halved=is_halved
     )
 
     return param
@@ -414,7 +419,9 @@ def create_action_result_embed(
     if len(ap.targets) > 0:
         if is_aoe(range):
             if damage:
-                damage_result = d20.roll(damage + ap.damage_bonus)
+                expression = damage + ap.damage_bonus
+                expression = expression_str(expression, ap.is_halved)
+                damage_result = d20.roll(expression)
                 meta += f"**Damage**: {damage_result}\n"
             if to_hit or damage:
                 embed.add_field(name="Meta", value=meta, inline=False)
@@ -429,7 +436,9 @@ def create_action_result_embed(
                     to_hit = to_hit.replace("1d20", "2d20kh1")
                 elif ap.is_dis:
                     to_hit = to_hit.replace("1d20", "2d20kl1")
-                hit_result = d20.roll(to_hit + ap.d20_bonus)
+                expression = to_hit + ap.d20_bonus
+                expression = expression_str(expression, ap.is_halved)
+                hit_result = d20.roll(expression)
                 meta += f"**{hit_description}**: {hit_result}\n"
             if damage and not is_aoe(range):
                 damage_result = d20.roll(damage + ap.damage_bonus)
@@ -446,10 +455,14 @@ def create_action_result_embed(
                 to_hit = to_hit.replace("1d20", "2d20kh1")
             elif ap.is_dis:
                 to_hit = to_hit.replace("1d20", "2d20kl1")
-            hit_result = d20.roll(to_hit + ap.d20_bonus)
+            expression = to_hit + ap.d20_bonus
+            expression = expression_str(expression, ap.is_halved)
+            hit_result = d20.roll(expression)
             meta += f"**{hit_description}**: {hit_result}\n"
         if damage:
-            damage_result = d20.roll(damage + ap.damage_bonus)
+            expression = damage + ap.damage_bonus
+            expression = expression_str(expression, ap.is_halved)
+            damage_result = d20.roll(expression)
             meta += f"**Damage**: {damage_result}\n"
         if to_hit or damage:
             embed.add_field(name="Meta", value=meta, inline=False)
@@ -620,6 +633,25 @@ def draw_quota(max_usages: int, usages: int) -> str:
     if usages <= 0:
         return max_usages * "〇"
     return usages * "◉" + used * "〇"
+
+
+def halve_flat_modifiers(expression):
+    def halve_match(match):
+        sign = match.group(1)
+        halved_value = f"({match.group(2)}/2)"
+        return f"{sign}{halved_value}"
+
+    # Regex pattern to match flat modifiers with an optional sign
+    pattern = r'([+-])(\d+)\b'
+    # Replace all matches with their halved values
+    halved_expression = re.sub(pattern, halve_match, expression)
+    return halved_expression
+
+
+def expression_str(expression: str, is_halved: bool):
+    if is_halved:
+        expression = halve_flat_modifiers(expression)
+    return expression
 
 
 def main():
