@@ -146,52 +146,68 @@ async def ping(ctx):
 
 @bot.command(aliases=["add"])
 async def add_sheet(ctx, url=""):
-    spreadsheet_id = get_spreadsheet_id(url)
-    if spreadsheet_id == "":
-        await ctx.send("Please provide a url")
-        return
-    df_data = get_df(spreadsheet_id, "data")
-    actions_data = get_df(spreadsheet_id, "actions")
-    data_dict = create_data_dict(df_data)
-    embed = create_embed(data_dict)
+    try:
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        df_data = get_df(spreadsheet_id, "data")
+        actions_data = get_df(spreadsheet_id, "actions")
+        data_dict = create_data_dict(df_data)
+        embed = create_embed(data_dict)
 
-    name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
-    charaRepo = CharacterUserMapRepository()
-    charaRepo.set_character(
-        ctx.guild.id,
-        ctx.author.id,
-        name,
-        df_data.to_json(),
-        actions_data.to_json(),
-        sheet_url=url
-        )
-    await ctx.send(f"Sheet `{name}` is added.", embed=embed)
+        # clean empty cells
+        actions_data['MaxUsages'].replace('', 0, inplace=True)
+        actions_data['Usages'].replace('', 0, inplace=True)
+
+        name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
+        charaRepo = CharacterUserMapRepository()
+        charaRepo.set_character(
+            ctx.guild.id,
+            ctx.author.id,
+            name,
+            df_data.to_json(),
+            actions_data.to_json(),
+            sheet_url=url
+            )
+        await ctx.send(f"Sheet `{name}` is added.", embed=embed)
+    except Exception as e:
+        print(e)
+        await ctx.send("Error. Please check input again.")
 
 
 @bot.command(aliases=["update"])
 async def update_sheet(ctx, url=""):
-    charaRepo = CharacterUserMapRepository()
-    character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    url = character[4]
-    spreadsheet_id = get_spreadsheet_id(url)
-    if spreadsheet_id == "":
-        await ctx.send("Please provide a url")
-        return
-    df_data = get_df(spreadsheet_id, "data")
-    actions_data = get_df(spreadsheet_id, "actions")
-    data_dict = create_data_dict(df_data)
-    embed = create_embed(data_dict)
+    try:
+        charaRepo = CharacterUserMapRepository()
+        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        url = character[4]
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        df_data = get_df(spreadsheet_id, "data")
+        actions_data = get_df(spreadsheet_id, "actions")
+        data_dict = create_data_dict(df_data)
+        embed = create_embed(data_dict)
 
-    name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
-    charaRepo = CharacterUserMapRepository()
-    charaRepo.set_character(
-        ctx.guild.id,
-        ctx.author.id,
-        name,
-        df_data.to_json(),
-        actions_data.to_json(),
-        sheet_url=url)
-    await ctx.send(f"Sheet `{name}` is updated.", embed=embed)
+        # clean empty cells
+        actions_data['MaxUsages'].replace('', 0, inplace=True)
+        actions_data['Usages'].replace('', 0, inplace=True)
+
+        name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
+        charaRepo = CharacterUserMapRepository()
+        charaRepo.set_character(
+            ctx.guild.id,
+            ctx.author.id,
+            name,
+            df_data.to_json(),
+            actions_data.to_json(),
+            sheet_url=url)
+        await ctx.send(f"Sheet `{name}` is updated.", embed=embed)
+    except Exception as e:
+        print(e)
+        await ctx.send("Error. Please check input again.")
 
 
 @bot.command(aliases=["sheet"])
