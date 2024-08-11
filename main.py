@@ -540,7 +540,9 @@ def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
         dice = "2d20kh1"
     elif ap.is_dis:
         dice = "2d20kl1"
-    check_result = d20.roll(dice + format_number(modifier) + ap.d20_bonus)
+    expression = dice + format_number(modifier) + ap.d20_bonus
+    expression = expression_str(expression, ap.is_halved)
+    check_result = d20.roll(expression)
     embed.description = f"{check_result}"
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
