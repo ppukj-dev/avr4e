@@ -415,13 +415,13 @@ def create_action_result_embed(
     usages = possible_action['Usages'].iloc[choosen]
     action_name = possible_action['Name'].iloc[choosen]
     embed_description = ""
-    flavor = possible_action['Flavor'].iloc[choosen]
-    effect = possible_action['Effect'].iloc[choosen]
-    to_hit = possible_action['To Hit'].iloc[choosen]
-    damage = possible_action['Damage'].iloc[choosen]
-    image = possible_action['Image'].iloc[choosen]
-    range = possible_action['Range'].iloc[choosen]
-    def_target = possible_action['DefTarget'].iloc[choosen]
+    flavor = str(possible_action['Flavor'].iloc[choosen])
+    effect = str(possible_action['Effect'].iloc[choosen])
+    to_hit = str(possible_action['To Hit'].iloc[choosen])
+    damage = str(possible_action['Damage'].iloc[choosen])
+    image = str(possible_action['Image'].iloc[choosen])
+    range = str(possible_action['Range'].iloc[choosen])
+    def_target = str(possible_action['DefTarget'].iloc[choosen])
     meta = ""
 
     def is_aoe(range):
@@ -540,7 +540,7 @@ def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
         dice = "2d20kh1"
     elif ap.is_dis:
         dice = "2d20kl1"
-    expression = dice + format_number(modifier) + ap.d20_bonus
+    expression = dice + format_number(modifier) + str(ap.d20_bonus)
     expression = expression_str(expression, ap.is_halved)
     check_result = d20.roll(expression)
     embed.description = f"{check_result}"
