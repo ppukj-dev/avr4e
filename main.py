@@ -430,6 +430,7 @@ def create_action_result_embed(
     image = str(possible_action['Image'].iloc[choosen])
     range = str(possible_action['Range'].iloc[choosen])
     def_target = str(possible_action['DefTarget'].iloc[choosen])
+    critdie = format_bonus(possible_action['Critdie'].iloc[choosen])
     meta = ""
 
     def is_aoe(range):
@@ -450,6 +451,8 @@ def create_action_result_embed(
                 expression = damage + ap.damage_bonus
                 expression = expression_str(expression, ap.is_halved)
                 damage_result = d20.roll(expression)
+                crit_expression = crit_damage_expression(expression) + critdie
+                crit_result = d20.roll(crit_expression)
                 meta += f"**Damage**: {damage_result}\n"
             if to_hit or damage:
                 embed.add_field(name="Meta", value=meta, inline=False)
@@ -469,8 +472,17 @@ def create_action_result_embed(
                 hit_result = d20.roll(expression)
                 meta += f"**{hit_description}**: {hit_result}\n"
             if damage and not is_aoe(range):
-                damage_result = d20.roll(damage + ap.damage_bonus)
+                expression = damage + ap.damage_bonus         
+                expression = expression_str(expression, ap.is_halved)
+                if to_hit and hit_result.crit == 1:
+                    expression = crit_damage_expression(expression) + critdie
+                damage_result = d20.roll(expression)
                 meta += f"**Damage**: {damage_result}\n"
+            elif damage and is_aoe(range):
+                aoedamage = damage_result
+                if to_hit and hit_result.crit == 1:
+                    aoedamage = crit_result
+                meta += f"**Damage**: {aoedamage}\n"
             if to_hit or damage:
                 embed.add_field(name=target, value=meta, inline=False)
     else:
@@ -490,6 +502,8 @@ def create_action_result_embed(
         if damage:
             expression = damage + ap.damage_bonus
             expression = expression_str(expression, ap.is_halved)
+            if to_hit and hit_result.crit == 1:
+                expression = crit_damage_expression(expression) + critdie
             damage_result = d20.roll(expression)
             meta += f"**Damage**: {damage_result}\n"
         if to_hit or damage:
@@ -676,9 +690,7 @@ def halve_flat_modifiers(expression):
         halved_value = f"({match.group(2)}/2)"
         return f"{sign}{halved_value}"
 
-    # Regex pattern to match flat modifiers with an optional sign
     pattern = r'([+-])(\d+)\b'
-    # Replace all matches with their halved values
     halved_expression = re.sub(pattern, halve_match, expression)
     return halved_expression
 
@@ -687,6 +699,19 @@ def expression_str(expression: str, is_halved: bool):
     if is_halved:
         expression = halve_flat_modifiers(expression)
     return expression
+
+
+def crit_damage_expression(expression: str):
+    pattern = r'([\d]+)d([\d]+)[khrmiaope]*[\d]*'
+
+    def replace_dice(match):
+        dice_count = match.group(1)
+        dice_value = match.group(2)
+        return f"({dice_count}*{dice_value})"
+
+    modified_expression = re.sub(pattern, replace_dice, expression)
+
+    return modified_expression
 
 
 def main():
