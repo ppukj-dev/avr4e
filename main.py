@@ -6,7 +6,6 @@ import os
 import d20
 import gspread
 import shlex
-import argparse
 import json
 import uvicorn
 from discord.ext import commands
@@ -316,48 +315,57 @@ async def handle_action(command, df, ctx, data, sheet_id):
 
 
 def parse_command(message) -> ActionParam:
-    # dumb things so negative value in args can be done
-    parser = argparse.ArgumentParser(prefix_chars='@@')
-    message = message.replace('@@', '')
-    message = message.replace(' -b', ' @@b')
-    message = message.replace(' -d', ' @@d')
-    message = re.sub(r'\badv\b', ' @@adv', message)
-    message = re.sub(r'\bdis\b', ' @@dis', message)
-    message = message.replace(' -t', ' @@t')
-    message = message.replace(' -h', ' @@h')
+    list_of_args = [
+        "-b", "-d", "adv", "dis", "-t", "-h"
+    ]
+    dict_of_args = {
+        "-b": -1,
+        "-d": -1,
+        "adv": -1,
+        "dis": -1,
+        "-h": -1
+    }
+    target_indices = []
 
-    parser.add_argument('move', type=str, help='The move name')
-    parser.add_argument('@@b', type=str)
-    parser.add_argument('@@d', type=str)
-    parser.add_argument('@@adv', nargs='?', const=True, default=False)
-    parser.add_argument('@@dis', nargs='?', const=True, default=False)
-    parser.add_argument('@@t', type=str, action='append')
-    parser.add_argument('@@h', nargs='?', const=True, default=False)
+    first_arg_idx = 99
     splitted_message = shlex.split(message)
-    try:
-        args = parser.parse_args(splitted_message)
-    except SystemExit as e:
-        print("Error System Exit", e)
-        return None
-
-    action = args.move
-    d20_bonus = format_bonus(args.b) if args.b is not None else ""
-    damage_bonus = format_bonus(args.d) if args.d is not None else ""
-    is_adv = args.adv is not False
-    is_dis = args.dis is not False
-    targets = args.t if args.t is not None else []
-    is_halved = args.h is not False
+    for idx, arg in enumerate(splitted_message):
+        if arg in list_of_args:
+            if idx < first_arg_idx:
+                first_arg_idx = idx
+            if arg == "-t":
+                target_indices.append(idx)
+                continue
+            dict_of_args[arg] = idx
+    action = " ".join(splitted_message[:first_arg_idx])
 
     param = ActionParam(
         name=action,
-        damage_bonus=damage_bonus,
-        d20_bonus=d20_bonus,
-        is_adv=is_adv,
-        is_dis=is_dis,
-        targets=targets,
-        is_halved=is_halved,
+        damage_bonus="",
+        d20_bonus="",
+        is_adv=False,
+        is_dis=False,
+        targets=[],
+        is_halved=False,
         thumbnail=""
     )
+
+    for key, value in dict_of_args.items():
+        if value == -1:
+            continue
+        if key == "-b":
+            param.d20_bonus = format_bonus(splitted_message[value+1])
+        elif key == "-d":
+            param.damage_bonus = format_bonus(splitted_message[value+1])
+        elif key == "adv":
+            param.is_adv = True
+        elif key == "dis":
+            param.is_dis = True
+        elif key == "-h":
+            param.is_halved = True
+
+    for idx in target_indices:
+        param.targets.append(splitted_message[idx+1])
 
     return param
 
