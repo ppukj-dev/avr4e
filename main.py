@@ -430,7 +430,10 @@ def create_action_result_embed(
     image = str(possible_action['Image'].iloc[choosen])
     range = str(possible_action['Range'].iloc[choosen])
     def_target = str(possible_action['DefTarget'].iloc[choosen])
-    critdie = format_bonus(possible_action['Critdie'].iloc[choosen])
+    try:
+        critdie = format_bonus(possible_action['Critdie'].iloc[choosen])
+    except Exception:
+        critdie = ""
     meta = ""
 
     def is_aoe(range):
