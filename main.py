@@ -158,6 +158,8 @@ async def add_sheet(ctx, url=""):
         # clean empty cells
         actions_data['MaxUsages'].replace('', 0, inplace=True)
         actions_data['Usages'].replace('', 0, inplace=True)
+        actions_data.replace('#REF!', None, inplace=True)
+        actions_data = actions_data.dropna()
 
         name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
         charaRepo = CharacterUserMapRepository()
