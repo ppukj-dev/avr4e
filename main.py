@@ -7,6 +7,7 @@ import d20
 import gspread
 import shlex
 import json
+import io
 import uvicorn
 from discord.ext import commands
 from repository import CharacterUserMapRepository
@@ -221,7 +222,7 @@ async def update_sheet(ctx, url=""):
 async def char(ctx):
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-    df_data = pd.read_json(character[2])
+    df_data = pd.read_json(io.StringIO(character[2]))
     data_dict = create_data_dict(df_data)
     embed = create_embed(data_dict)
 
@@ -234,7 +235,7 @@ async def reset(ctx, *, args=None):
         await ctx.message.delete()
         charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-        actions = pd.read_json(character[3])
+        actions = pd.read_json(io.StringIO(character[3]))
         if args is None:
             actions['Usages'] = actions['MaxUsages']
             message = "All actions are reset."
@@ -266,8 +267,8 @@ async def action(ctx, *, args=None):
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
         sheet_id = character[0]
         name = character[1]
-        data = pd.read_json(character[2])
-        actions = pd.read_json(character[3])
+        data = pd.read_json(io.StringIO(character[2]))
+        actions = pd.read_json(io.StringIO(character[3]))
         if args is None:
             embed = create_action_list_embed(name, actions)
         else:
@@ -285,7 +286,7 @@ async def token(ctx, *, args=None):
         await ctx.message.delete()
         charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-        data = pd.read_json(character[2])
+        data = pd.read_json(io.StringIO(character[2]))
         embed = discord.Embed()
         name = data[data['field_name'] == 'Name']['value'].iloc[0]
         token = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
@@ -570,7 +571,7 @@ async def check(ctx, *, args=None):
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
         # sheet_id = character[0]
         name = character[1]
-        data = pd.read_json(character[2])
+        data = pd.read_json(io.StringIO(character[2]))
         embed = await handle_check(args, data, ctx, name)
         await ctx.send(embed=embed)
     except Exception as e:
