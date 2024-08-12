@@ -279,6 +279,24 @@ async def action(ctx, *, args=None):
         await ctx.send("Error. Please check input again.")
 
 
+@bot.command()
+async def token(ctx, *, args=None):
+    try:
+        await ctx.message.delete()
+        charaRepo = CharacterUserMapRepository()
+        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        data = pd.read_json(character[2])
+        embed = discord.Embed()
+        name = data[data['field_name'] == 'Name']['value'].iloc[0]
+        token = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
+        embed.title = name
+        embed.set_image(url=token)
+        await ctx.send(embed=embed)
+    except Exception as e:
+        print(e)
+        await ctx.send("Error. Please check input again.")
+
+
 def create_action_list_embed(name, df):
     embed = discord.Embed()
     embed.title = f"{name}'s Actions"
