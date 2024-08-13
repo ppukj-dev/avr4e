@@ -79,6 +79,7 @@ class ActionParam():
     targets: List[str] = Field(default_factory=list)
     is_halved: bool = False
     thumbnail: str = ""
+    is_critical: bool = False
 
 
 @app.post("/roll")
@@ -358,14 +359,15 @@ async def handle_action(command, df, ctx, data, sheet_id):
 
 def parse_command(message) -> ActionParam:
     list_of_args = [
-        "-b", "-d", "adv", "dis", "-t", "-h"
+        "-b", "-d", "adv", "dis", "-t", "-h", "-crit"
     ]
     dict_of_args = {
         "-b": -1,
         "-d": -1,
         "adv": -1,
         "dis": -1,
-        "-h": -1
+        "-h": -1,
+        "-crit": -1
     }
     target_indices = []
 
@@ -389,7 +391,8 @@ def parse_command(message) -> ActionParam:
         is_dis=False,
         targets=[],
         is_halved=False,
-        thumbnail=""
+        thumbnail="",
+        is_critical=False
     )
 
     for key, value in dict_of_args.items():
@@ -405,6 +408,8 @@ def parse_command(message) -> ActionParam:
             param.is_dis = True
         elif key == "-h":
             param.is_halved = True
+        elif key == "-crit":
+            param.is_critical = True
 
     for idx in target_indices:
         param.targets.append(splitted_message[idx+1])
@@ -503,7 +508,7 @@ def create_action_result_embed(
                 embed.add_field(name="Meta", value=meta, inline=False)
         for target in ap.targets:
             meta = ""
-            if to_hit:
+            if not ap.is_critical and to_hit:
                 if to_hit[0] == "d":
                     to_hit = "1"+to_hit
                 if ap.is_adv and ap.is_dis:
@@ -519,19 +524,19 @@ def create_action_result_embed(
             if damage and not is_aoe(range):
                 expression = damage + ap.damage_bonus         
                 expression = expression_str(expression, ap.is_halved)
-                if to_hit and hit_result.crit == 1:
+                if ap.is_critical or (to_hit and hit_result.crit == 1):
                     expression = crit_damage_expression(expression) + critdie
                 damage_result = d20.roll(expression)
                 meta += f"**Damage**: {damage_result}\n"
             elif damage and is_aoe(range):
                 aoedamage = damage_result
-                if to_hit and hit_result.crit == 1:
+                if ap.is_critical or (to_hit and hit_result.crit == 1):
                     aoedamage = crit_result
                 meta += f"**Damage**: {aoedamage}\n"
             if to_hit or damage:
                 embed.add_field(name=target, value=meta, inline=False)
     else:
-        if to_hit:
+        if not ap.is_critical and to_hit:
             if to_hit[0] == "d":
                 to_hit = "1"+to_hit
             if ap.is_adv and ap.is_dis:
@@ -547,7 +552,7 @@ def create_action_result_embed(
         if damage:
             expression = damage + ap.damage_bonus
             expression = expression_str(expression, ap.is_halved)
-            if to_hit and hit_result.crit == 1:
+            if ap.is_critical or (to_hit and hit_result.crit == 1):
                 expression = crit_damage_expression(expression) + critdie
             damage_result = d20.roll(expression)
             meta += f"**Damage**: {damage_result}\n"
