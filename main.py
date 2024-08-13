@@ -10,6 +10,7 @@ import json
 import io
 import uvicorn
 import requests
+import traceback
 from discord.ext import commands
 from repository import CharacterUserMapRepository
 from pydantic import BaseModel
@@ -80,6 +81,7 @@ class ActionParam():
     is_halved: bool = False
     thumbnail: str = ""
     is_critical: bool = False
+    usages: int = 1
 
 
 @app.post("/roll")
@@ -179,7 +181,7 @@ async def add_sheet(ctx, url=""):
             )
         await ctx.send(f"Sheet `{name}` is added.", embed=embed)
     except Exception as e:
-        print(e)
+        print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
 
@@ -217,7 +219,7 @@ async def update_sheet(ctx, url=""):
             sheet_url=url)
         await ctx.send(f"Sheet `{name}` is updated.", embed=embed)
     except Exception as e:
-        print(e)
+        print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
 
@@ -258,7 +260,7 @@ async def reset(ctx, *, args=None):
         embed.description = description
         await ctx.send(message, embed=embed)
     except Exception as e:
-        print(e)
+        print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
 
@@ -279,7 +281,7 @@ async def action(ctx, *, args=None):
             embed = await handle_action(args, actions, ctx, data, sheet_id)
         await ctx.send(embed=embed)
     except Exception as e:
-        print(e)
+        print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
 
@@ -310,7 +312,7 @@ async def token(ctx, *, args=None):
             await ctx.send(file=file_token)
             os.remove(new_token)
     except Exception as e:
-        print(e)
+        print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
 
@@ -347,19 +349,31 @@ async def handle_action(command, df, ctx, data, sheet_id):
             return None
     else:
         choosen = 0
-    if possible_action['MaxUsages'].iloc[choosen] > 0:
+    embed = create_action_result_embed(possible_action, choosen, name, ap)
+    max_usages = possible_action['MaxUsages'].iloc[choosen]
+    usages = possible_action['Usages'].iloc[choosen]
+    if max_usages > 0:
         action_name = possible_action['Name'].iloc[choosen]
-        usages = df.loc[df['Name'] == action_name, 'Usages'].iloc[0]
-        new_usages = usages - 1 if usages > 0 else 0
+        new_usages = usages - ap.usages
+        increment = f" ({format_bonus(str(-ap.usages))})"
+        if new_usages < 0:
+            new_usages = usages
+            embed.title = f"{name} cannot use {action_name}."
+            increment = f" (Out of Usages; {format_bonus(str(-ap.usages))})"
+        elif new_usages > max_usages:
+            new_usages = max_usages
+        usages_value = draw_quota(max_usages, new_usages)
+        usages_value += increment
+        embed.add_field(name=action_name, value=usages_value, inline=False)
         df.loc[df['Name'] == action_name, 'Usages'] = new_usages
         charaRepo = CharacterUserMapRepository()
         charaRepo.update_character(sheet_id, None, df.to_json())
-    return create_action_result_embed(possible_action, choosen, name, ap)
+    return embed
 
 
 def parse_command(message) -> ActionParam:
     list_of_args = [
-        "-b", "-d", "adv", "dis", "-t", "-h", "-crit"
+        "-b", "-d", "adv", "dis", "-t", "-h", "-crit", "-u"
     ]
     dict_of_args = {
         "-b": -1,
@@ -367,7 +381,8 @@ def parse_command(message) -> ActionParam:
         "adv": -1,
         "dis": -1,
         "-h": -1,
-        "-crit": -1
+        "-crit": -1,
+        "-u": -1
     }
     target_indices = []
 
@@ -392,7 +407,8 @@ def parse_command(message) -> ActionParam:
         targets=[],
         is_halved=False,
         thumbnail="",
-        is_critical=False
+        is_critical=False,
+        usages=1
     )
 
     for key, value in dict_of_args.items():
@@ -410,6 +426,8 @@ def parse_command(message) -> ActionParam:
             param.is_halved = True
         elif key == "-crit":
             param.is_critical = True
+        elif key == "-u":
+            param.usages = int(splitted_message[value+1])
 
     for idx in target_indices:
         param.targets.append(splitted_message[idx+1])
@@ -466,8 +484,6 @@ async def get_user_choice(choices, column_name, ctx):
 def create_action_result_embed(
         possible_action, choosen, name, ap: ActionParam):
     embed = discord.Embed()
-    max_usages = possible_action['MaxUsages'].iloc[choosen]
-    usages = possible_action['Usages'].iloc[choosen]
     action_name = possible_action['Name'].iloc[choosen]
     embed_description = ""
     flavor = str(possible_action['Flavor'].iloc[choosen])
@@ -564,15 +580,6 @@ def create_action_result_embed(
         embed.add_field(name="Effect", value=effect, inline=False)
     if image:
         embed.set_image(url=image)
-    if max_usages > 0:
-        increment = " (-1)"
-        usages_value = draw_quota(max_usages, usages - 1)
-        if usages <= 0:
-            embed.title = f"{name} cannot use {action_name}."
-            usages_value = draw_quota(max_usages, usages - 1)
-            increment = " (Out of Usages)"
-        usages_value += increment
-        embed.add_field(name=action_name, value=usages_value, inline=False)
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
 
@@ -595,7 +602,7 @@ async def check(ctx, *, args=None):
         embed = await handle_check(args, data, ctx, name)
         await ctx.send(embed=embed)
     except Exception as e:
-        print(e)
+        print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
 
