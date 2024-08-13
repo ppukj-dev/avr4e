@@ -9,6 +9,7 @@ import shlex
 import json
 import io
 import uvicorn
+import requests
 from discord.ext import commands
 from repository import CharacterUserMapRepository
 from pydantic import BaseModel
@@ -17,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from typing import List
+from PIL import Image, ImageOps, ImageDraw
 
 
 load_dotenv()
@@ -283,16 +285,29 @@ async def action(ctx, *, args=None):
 @bot.command()
 async def token(ctx, *, args=None):
     try:
-        await ctx.message.delete()
-        charaRepo = CharacterUserMapRepository()
-        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
-        data = pd.read_json(io.StringIO(character[2]))
-        embed = discord.Embed()
-        name = data[data['field_name'] == 'Name']['value'].iloc[0]
-        token = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
-        embed.title = name
-        embed.set_image(url=token)
-        await ctx.send(embed=embed)
+        if args is None:
+            await ctx.message.delete()
+            charaRepo = CharacterUserMapRepository()
+            character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+            data = pd.read_json(io.StringIO(character[2]))
+            embed = discord.Embed()
+            name = data[data['field_name'] == 'Name']['value'].iloc[0]
+            token = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
+            embed.title = name
+            embed.set_image(url=token)
+            await ctx.send(embed=embed)
+        if args == "shinreigumi":
+            await ctx.message.delete()
+            charaRepo = CharacterUserMapRepository()
+            character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+            data = pd.read_json(io.StringIO(character[2]))
+            name = data[data['field_name'] == 'Name']['value'].iloc[0]
+            token = data[data['field_name'] == 'Thumbnail']['value'].iloc[0]
+            new_token = add_border_template(
+                token, "shinreigumi_border.png", name)
+            file_token = discord.File(new_token, filename=f"{name}.png")
+            await ctx.send(file=file_token)
+            os.remove(new_token)
     except Exception as e:
         print(e)
         await ctx.send("Error. Please check input again.")
@@ -742,6 +757,32 @@ def crit_damage_expression(expression: str):
     modified_expression = re.sub(pattern, replace_dice, expression)
 
     return modified_expression
+
+
+def add_border_template(url, template_path, name=""):
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to download image: {response.status_code}")
+    img = Image.open(io.BytesIO(response.content)).convert("RGBA")
+    template = Image.open(template_path).convert("RGBA")
+
+    # Resize the image to fit within the template's inner circle
+    template_size = template.size
+    img = ImageOps.fit(img, template_size, centering=(0.5, 0.5))
+
+    # Create a circular mask for the image
+    mask = Image.new('L', template_size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.ellipse((1, 1, template_size[0]-1, template_size[1]-1), fill=255)
+
+    # Apply the circular mask to the image
+    img.putalpha(mask)
+
+    # Composite the image onto the template
+    image_path = f"temp/{name}.png"
+    final_image = Image.alpha_composite(img, template)
+    final_image.save(image_path)
+    return image_path
 
 
 def main():

@@ -179,3 +179,5 @@ pyrightconfig.json
 database/avr4e.db
 
 credentials.json
+
+temp/*.png
