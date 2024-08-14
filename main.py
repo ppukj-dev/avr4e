@@ -486,6 +486,7 @@ def create_action_result_embed(
     embed = discord.Embed()
     action_name = possible_action['Name'].iloc[choosen]
     embed_description = ""
+    critdie = ""
     flavor = str(possible_action['Flavor'].iloc[choosen])
     effect = str(possible_action['Effect'].iloc[choosen])
     to_hit = str(possible_action['To Hit'].iloc[choosen])
@@ -493,10 +494,10 @@ def create_action_result_embed(
     image = str(possible_action['Image'].iloc[choosen])
     range = str(possible_action['Range'].iloc[choosen])
     def_target = str(possible_action['DefTarget'].iloc[choosen])
-    try:
+    if 'FreeText' in possible_action:
+        embed_description = str(possible_action['FreeText'].iloc[choosen])
+    if 'Critdie' in possible_action:
         critdie = format_bonus(possible_action['Critdie'].iloc[choosen])
-    except Exception:
-        critdie = ""
     meta = ""
 
     def is_aoe(range):
