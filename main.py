@@ -573,7 +573,7 @@ def create_action_result_embed(
     if 'FreeText' in possible_action:
         embed_description = str(possible_action['FreeText'].iloc[choosen])
     if 'Critdie' in possible_action:
-        critdie = format_bonus(possible_action['Critdie'].iloc[choosen])
+        critdie = format_bonus(str(possible_action['Critdie'].iloc[choosen]))
     meta = ""
 
     def is_aoe(range):
