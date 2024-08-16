@@ -71,13 +71,22 @@ class Roll(BaseModel):
 
 
 @dataclass
+class TargetParam():
+    name: str = ""
+    damage_bonus: str = ""
+    d20_bonus: str = ""
+    is_adv: bool = False
+    is_dis: bool = False
+
+
+@dataclass
 class ActionParam():
     name: str = ""
     damage_bonus: str = ""
     d20_bonus: str = ""
     is_adv: bool = False
     is_dis: bool = False
-    targets: List[str] = Field(default_factory=list)
+    targets: List[TargetParam] = Field(default_factory=list)
     is_halved: bool = False
     thumbnail: str = ""
     is_critical: bool = False
@@ -373,7 +382,8 @@ async def handle_action(command, df, ctx, data, sheet_id):
 
 def parse_command(message) -> ActionParam:
     list_of_args = [
-        "-b", "-d", "adv", "dis", "-t", "-h", "-crit", "-u"
+        "-b", "-d", "adv", "dis", "-h",
+        "-crit", "-u", "-adv", "-dis", "crit"
     ]
     dict_of_args = {
         "-b": -1,
@@ -384,7 +394,13 @@ def parse_command(message) -> ActionParam:
         "-crit": -1,
         "-u": -1
     }
-    target_indices = []
+
+    splitted_message = message.split("-t")
+    if len(splitted_message) < 1:
+        return None
+    
+    targets_string = splitted_message[1:]
+    message = splitted_message[0]
 
     first_arg_idx = 99
     splitted_message = shlex.split(message)
@@ -392,9 +408,6 @@ def parse_command(message) -> ActionParam:
         if arg in list_of_args:
             if idx < first_arg_idx:
                 first_arg_idx = idx
-            if arg == "-t":
-                target_indices.append(idx)
-                continue
             dict_of_args[arg] = idx
     action = " ".join(splitted_message[:first_arg_idx])
 
@@ -418,19 +431,78 @@ def parse_command(message) -> ActionParam:
             param.d20_bonus = format_bonus(splitted_message[value+1])
         elif key == "-d":
             param.damage_bonus = format_bonus(splitted_message[value+1])
-        elif key == "adv":
+        elif key == "adv" or key == "-adv":
             param.is_adv = True
-        elif key == "dis":
+        elif key == "dis" or key == "-dis":
             param.is_dis = True
         elif key == "-h":
             param.is_halved = True
-        elif key == "-crit":
+        elif key == "-crit" or key == "crit":
             param.is_critical = True
         elif key == "-u":
             param.usages = int(splitted_message[value+1])
 
-    for idx in target_indices:
-        param.targets.append(splitted_message[idx+1])
+    for idx, target_string in enumerate(targets_string):
+        target = parse_target_param(target_string)
+        target.d20_bonus = param.d20_bonus + target.d20_bonus
+        target.damage_bonus = param.damage_bonus + target.damage_bonus
+        target.is_adv = param.is_adv or target.is_adv
+        target.is_dis = param.is_dis or target.is_dis
+        param.targets.append(target)
+
+    if len(param.targets) == 0:
+        param.targets.append(
+            TargetParam(
+                name="Meta",
+                damage_bonus=param.damage_bonus,
+                d20_bonus=param.d20_bonus,
+                is_adv=param.is_adv,
+                is_dis=param.is_dis
+            )
+        )
+
+    return param
+
+
+def parse_target_param(message) -> TargetParam:
+    list_of_args = [
+        "-b", "-d", "adv", "dis", "-dis", "-adv"
+    ]
+    dict_of_args = {
+        "-b": -1,
+        "-d": -1,
+        "adv": -1,
+        "dis": -1
+    }
+
+    first_arg_idx = 99
+    splitted_message = shlex.split(message)
+    for idx, arg in enumerate(splitted_message):
+        if arg in list_of_args:
+            if idx < first_arg_idx:
+                first_arg_idx = idx
+            dict_of_args[arg] = idx
+    target_name = " ".join(splitted_message[:first_arg_idx])
+
+    param = TargetParam(
+        name=target_name,
+        damage_bonus="",
+        d20_bonus="",
+        is_adv=False,
+        is_dis=False
+    )
+
+    for key, value in dict_of_args.items():
+        if value == -1:
+            continue
+        if key == "-b":
+            param.d20_bonus = format_bonus(splitted_message[value+1])
+        elif key == "-d":
+            param.damage_bonus = format_bonus(splitted_message[value+1])
+        elif key == "adv" or key == "-adv":
+            param.is_adv = True
+        elif key == "dis" or key == "-dis":
+            param.is_dis = True
 
     return param
 
@@ -438,7 +510,11 @@ def parse_command(message) -> ActionParam:
 def translate_cvar(message, df):
     cvar = df[df['category'] == 'CVAR']
     for _, row in cvar.iterrows():
-        if row["field_name"] in ["adv", "dis", "-t", "-b", "-d"]:
+        if row["field_name"].lower() in [
+                    "adv", "dis", "-t", "-b", "-d",
+                    "crit", "-u", "-adv", "-dis", "crit",
+                    "-h"
+                ]:
             continue
         replaceable = fr"\b{re.escape(row['field_name'])}\b"
         message = re.sub(replaceable, str(row["value"]), message)
@@ -512,69 +588,42 @@ def create_action_result_embed(
     hit_description = "To Hit"
     if def_target:
         hit_description = f"To Hit vs {def_target}"
-    if len(ap.targets) > 0:
-        if is_aoe(range):
-            if damage:
-                expression = damage + ap.damage_bonus
-                expression = expression_str(expression, ap.is_halved)
-                damage_result = d20.roll(expression)
-                crit_expression = crit_damage_expression(expression) + critdie
-                crit_result = d20.roll(crit_expression)
-                meta += f"**Damage**: {damage_result}\n"
-            if to_hit or damage:
-                embed.add_field(name="Meta", value=meta, inline=False)
-        for target in ap.targets:
-            meta = ""
-            if not ap.is_critical and to_hit:
-                if to_hit[0] == "d":
-                    to_hit = "1"+to_hit
-                if ap.is_adv and ap.is_dis:
-                    pass
-                elif ap.is_adv:
-                    to_hit = to_hit.replace("1d20", "2d20kh1")
-                elif ap.is_dis:
-                    to_hit = to_hit.replace("1d20", "2d20kl1")
-                expression = to_hit + ap.d20_bonus
-                expression = expression_str(expression, ap.is_halved)
-                hit_result = d20.roll(expression)
-                meta += f"**{hit_description}**: {hit_result}\n"
-            if damage and not is_aoe(range):
-                expression = damage + ap.damage_bonus         
-                expression = expression_str(expression, ap.is_halved)
-                if ap.is_critical or (to_hit and hit_result.crit == 1):
-                    expression = crit_damage_expression(expression) + critdie
-                damage_result = d20.roll(expression)
-                meta += f"**Damage**: {damage_result}\n"
-            elif damage and is_aoe(range):
-                aoedamage = damage_result
-                if ap.is_critical or (to_hit and hit_result.crit == 1):
-                    aoedamage = crit_result
-                meta += f"**Damage**: {aoedamage}\n"
-            if to_hit or damage:
-                embed.add_field(name=target, value=meta, inline=False)
-    else:
+    if is_aoe(range):
+        if damage:
+            expression = damage + ap.damage_bonus
+            expression = expression_str(expression, ap.is_halved)
+            damage_result = d20.roll(expression)
+            crit_expression = crit_damage_expression(expression) + critdie
+            crit_result = d20.roll(crit_expression)
+    for target in ap.targets:
+        meta = ""
         if not ap.is_critical and to_hit:
             if to_hit[0] == "d":
                 to_hit = "1"+to_hit
-            if ap.is_adv and ap.is_dis:
+            if target.is_adv and target.is_dis:
                 pass
-            elif ap.is_adv:
+            elif target.is_adv:
                 to_hit = to_hit.replace("1d20", "2d20kh1")
-            elif ap.is_dis:
+            elif target.is_dis:
                 to_hit = to_hit.replace("1d20", "2d20kl1")
-            expression = to_hit + ap.d20_bonus
+            expression = to_hit + target.d20_bonus
             expression = expression_str(expression, ap.is_halved)
             hit_result = d20.roll(expression)
             meta += f"**{hit_description}**: {hit_result}\n"
-        if damage:
-            expression = damage + ap.damage_bonus
+        if damage and not is_aoe(range):
+            expression = damage + target.damage_bonus         
             expression = expression_str(expression, ap.is_halved)
             if ap.is_critical or (to_hit and hit_result.crit == 1):
                 expression = crit_damage_expression(expression) + critdie
             damage_result = d20.roll(expression)
             meta += f"**Damage**: {damage_result}\n"
+        elif damage and is_aoe(range):
+            aoedamage = damage_result
+            if ap.is_critical or (to_hit and hit_result.crit == 1):
+                aoedamage = crit_result
+            meta += f"**Damage**: {aoedamage}\n"
         if to_hit or damage:
-            embed.add_field(name="Meta", value=meta, inline=False)
+            embed.add_field(name=target.name, value=meta, inline=False)
     if flavor:
         embed.add_field(name="Description", value=flavor, inline=False)
     if effect:
