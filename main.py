@@ -398,7 +398,6 @@ def parse_command(message) -> ActionParam:
     splitted_message = message.split("-t")
     if len(splitted_message) < 1:
         return None
-    
     targets_string = splitted_message[1:]
     message = splitted_message[0]
 
@@ -611,7 +610,7 @@ def create_action_result_embed(
             hit_result = d20.roll(expression)
             meta += f"**{hit_description}**: {hit_result}\n"
         if damage and not is_aoe(range):
-            expression = damage + target.damage_bonus         
+            expression = damage + target.damage_bonus
             expression = expression_str(expression, ap.is_halved)
             if ap.is_critical or (to_hit and hit_result.crit == 1):
                 expression = crit_damage_expression(expression) + critdie
