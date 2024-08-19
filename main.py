@@ -200,6 +200,7 @@ async def update_sheet(ctx, url=""):
     try:
         charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        old_actions_data = pd.read_json(io.StringIO(character[3]))
         url = character[4]
         spreadsheet_id = get_spreadsheet_id(url)
         if spreadsheet_id == "":
@@ -218,14 +219,25 @@ async def update_sheet(ctx, url=""):
         df_data = df_data.replace('#REF!', None)
         df_data = df_data.dropna()
 
+        madf = pd.merge(
+            actions_data,
+            old_actions_data[['Name', 'Usages']],
+            on='Name',
+            how='left',
+            suffixes=('', '_old')
+        )
+        madf['Usages'] = madf['Usages_old'].combine_first(
+            madf['Usages']
+        )
+        madf = madf.drop(columns=['Usages_old'])
+
         name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
-        charaRepo = CharacterUserMapRepository()
         charaRepo.set_character(
             ctx.guild.id,
             ctx.author.id,
             name,
             df_data.to_json(),
-            actions_data.to_json(),
+            madf.to_json(),
             sheet_url=url)
         await ctx.send(f"Sheet `{name}` is updated.", embed=embed)
     except Exception as e:
@@ -850,8 +862,7 @@ def add_border_template(url, template_path, name=""):
 utc = datetime.timezone.utc
 times = [
     datetime.time(hour=0, tzinfo=utc),
-    datetime.time(hour=12, tzinfo=utc),
-    datetime.time(hour=7, minute=15, second=30, tzinfo=utc)
+    datetime.time(hour=12, tzinfo=utc)
 ]
 
 
