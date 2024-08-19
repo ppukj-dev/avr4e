@@ -851,7 +851,7 @@ utc = datetime.timezone.utc
 times = [
     datetime.time(hour=0, tzinfo=utc),
     datetime.time(hour=12, tzinfo=utc),
-    datetime.time(hour=2, minute=57, second=30, tzinfo=utc)
+    datetime.time(hour=7, minute=15, second=30, tzinfo=utc)
 ]
 
 
@@ -864,14 +864,15 @@ async def check_timestamps():
     delta = now - start_date
     total_sessions = int(1 + delta.total_seconds() // (60 * 60 * 12))
     start_month = 2
-    month_number = int((start_month + (total_sessions // 8)) % 12)
+    month_number = int((start_month + ((total_sessions-1) // 7)) % 12)
     chapter_number = total_sessions // 15 + 1
-    month_list = [
-        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-        "Juli", "Agustus", "September", "Oktober", "November",
-        "Desember"
-    ]
-    month = month_list[month_number]
+    # month_list = [
+    #     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    #     "Juli", "Agustus", "September", "Oktober", "November",
+    #     "Desember"
+    # ]
+    # month = month_list[month_number]
+    month = f"月 {month_number+1:02}"
     month_season_dict = {
         3: "🌸", 4: "🌸", 5: "🌸",
         6: "🌞", 7: "🌞", 8: "🌞",
