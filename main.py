@@ -880,7 +880,7 @@ async def check_timestamps():
     }
     season = month_season_dict[month_number+1]
     session_number = two_digit(total_sessions)
-    channel_name = f"{month} {season} - {chapter_number}.{session_number}"
+    channel_name = f"📅 {month} {season} - {chapter_number}.{session_number}"
     # await channel_ooc.send("Ganti Tanggal")
     try:
         await channel_calendar.edit(name=channel_name)
