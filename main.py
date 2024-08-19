@@ -11,7 +11,8 @@ import io
 import uvicorn
 import requests
 import traceback
-from discord.ext import commands
+from discord.ext import commands, tasks
+import datetime
 from repository import CharacterUserMapRepository
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass, Field
@@ -20,7 +21,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from typing import List
 from PIL import Image, ImageOps, ImageDraw
-
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -150,6 +150,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
+    check_timestamps.start()
     print("We have logged in as {0.user}".format(bot))
 
 
@@ -844,6 +845,53 @@ def add_border_template(url, template_path, name=""):
     final_image = Image.alpha_composite(img, template)
     final_image.save(image_path)
     return image_path
+
+
+utc = datetime.timezone.utc
+times = [
+    datetime.time(hour=0, tzinfo=utc),
+    datetime.time(hour=12, tzinfo=utc),
+    datetime.time(hour=2, minute=57, second=30, tzinfo=utc)
+]
+
+
+@tasks.loop(time=times)
+async def check_timestamps():
+    channel_calendar = bot.get_channel(1265647805867888741)
+    # channel_ooc = bot.get_channel(939933100752924693)
+    start_date = datetime.datetime(2024, 8, 17, 0, 0, 0, tzinfo=utc)
+    now = datetime.datetime.now(utc)
+    delta = now - start_date
+    total_sessions = int(1 + delta.total_seconds() // (60 * 60 * 12))
+    start_month = 2
+    month_number = int((start_month + (total_sessions // 8)) % 12)
+    chapter_number = total_sessions // 15 + 1
+    month_list = [
+        "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+        "Juli", "Agustus", "September", "Oktober", "November",
+        "Desember"
+    ]
+    month = month_list[month_number]
+    month_season_dict = {
+        3: "🌸", 4: "🌸", 5: "🌸",
+        6: "🌞", 7: "🌞", 8: "🌞",
+        9: "🍁", 10: "🍁", 11: "🍁",
+        12: "❄️", 1: "❄️", 2: "❄️"
+    }
+    season = month_season_dict[month_number+1]
+    session_number = two_digit(total_sessions)
+    channel_name = f"{month} {season} - {chapter_number}.{session_number}"
+    # await channel_ooc.send("Ganti Tanggal")
+    try:
+        await channel_calendar.edit(name=channel_name)
+    except Exception as e:
+        print(e, traceback.format_exc())    
+
+
+def two_digit(number):
+    if number < 10:
+        return f"0{number}"
+    return str(number)
 
 
 def main():
