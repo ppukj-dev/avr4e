@@ -1,9 +1,11 @@
+import discord.ext.commands
 import pandas as pd
 import asyncio
 import discord
 import re
 import os
 import d20
+import discord.ext
 import gspread
 import shlex
 import json
@@ -306,6 +308,8 @@ async def action(ctx, *, args=None):
         else:
             args = translate_cvar(args, data)
             embed = await handle_action(args, actions, ctx, data, sheet_id)
+        if embed is None:
+            return
         await ctx.send(embed=embed)
     except Exception as e:
         print(e, traceback.format_exc())
@@ -548,7 +552,8 @@ def translate_cvar(message, df):
     return message
 
 
-async def get_user_choice(choices, column_name, ctx):
+async def get_user_choice(
+        choices, column_name, ctx: discord.ext.commands.Context):
     idx = 1
     list = ""
     for _, name in choices[column_name].items():
@@ -563,7 +568,7 @@ async def get_user_choice(choices, column_name, ctx):
     embed.set_footer(text="Type 1-10 to choose, or c to cancel.")
     option_message = await ctx.send(embed=embed)
 
-    def followup(message):
+    def followup(message: discord.Message):
         return (
             message.content.isnumeric() or message.content == "c"
             ) and message.author == ctx.message.author
@@ -576,11 +581,12 @@ async def get_user_choice(choices, column_name, ctx):
         await ctx.send("Time Out")
         return None
     else:
+        await followup_message.delete()
         if followup_message.content == "c":
+            await option_message.edit(content="Cancelled", embed=None)
             return None
         choosen = int(followup_message.content) - 1
         await option_message.delete()
-        await followup_message.delete()
         return choosen
 
 
@@ -677,6 +683,8 @@ async def check(ctx, *, args=None):
         name = character[1]
         data = pd.read_json(io.StringIO(character[2]))
         embed = await handle_check(args, data, ctx, name)
+        if embed is None:
+            return
         await ctx.send(embed=embed)
     except Exception as e:
         print(e, traceback.format_exc())
