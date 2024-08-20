@@ -91,6 +91,7 @@ class ActionParam():
     thumbnail: str = ""
     is_critical: bool = False
     usages: int = 1
+    multiroll: int = 1
 
 
 @app.post("/roll")
@@ -398,17 +399,9 @@ def parse_command(message) -> ActionParam:
         "-b", "-d", "adv", "dis", "-adv", "-dis"
     ]
     general_args = [
-        "-h", "-crit", "-u", "crit"
+        "-h", "-crit", "-u", "crit", "-rr"
     ]
-    dict_of_args = {
-        "-b": -1,
-        "-d": -1,
-        "adv": -1,
-        "dis": -1,
-        "-h": -1,
-        "-crit": -1,
-        "-u": -1
-    }
+    dict_of_args = {}
 
     # for general args
     splitted_message = shlex.split(message)
@@ -462,6 +455,8 @@ def parse_command(message) -> ActionParam:
             param.is_critical = True
         elif key == "-u":
             param.usages = int(splitted_message[value+1])
+        elif key == "-rr":
+            param.multiroll = int(splitted_message[value+1])
 
     for idx, target_string in enumerate(targets_string):
         target = parse_target_param(target_string)
@@ -489,12 +484,7 @@ def parse_target_param(message) -> TargetParam:
     list_of_args = [
         "-b", "-d", "adv", "dis", "-dis", "-adv"
     ]
-    dict_of_args = {
-        "-b": -1,
-        "-d": -1,
-        "adv": -1,
-        "dis": -1
-    }
+    dict_of_args = {}
 
     first_arg_idx = 99
     splitted_message = shlex.split(message)
@@ -683,17 +673,35 @@ def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
     check_name = possible_check['field_name'].iloc[choosen]
 
     embed.title = f"{name} makes {check_name} check!"
-    dice = "1d20"
-    if ap.is_adv and ap.is_dis:
-        pass
-    elif ap.is_adv:
-        dice = "2d20kh1"
-    elif ap.is_dis:
-        dice = "2d20kl1"
-    expression = dice + format_number(modifier) + str(ap.d20_bonus)
-    expression = expression_str(expression, ap.is_halved)
-    check_result = d20.roll(expression)
-    embed.description = f"{check_result}"
+    if ap.multiroll > 1:
+        for i in range(ap.multiroll):
+            dice = "1d20"
+            if ap.is_adv and ap.is_dis:
+                pass
+            elif ap.is_adv:
+                dice = "2d20kh1"
+            elif ap.is_dis:
+                dice = "2d20kl1"
+            expression = dice + format_number(modifier) + str(ap.d20_bonus)
+            expression = expression_str(expression, ap.is_halved)
+            check_result = d20.roll(expression)
+            embed.add_field(
+                name=f"Check {i+1}",
+                value=check_result,
+                inline=True
+            )
+    else:
+        dice = "1d20"
+        if ap.is_adv and ap.is_dis:
+            pass
+        elif ap.is_adv:
+            dice = "2d20kh1"
+        elif ap.is_dis:
+            dice = "2d20kl1"
+        expression = dice + format_number(modifier) + str(ap.d20_bonus)
+        expression = expression_str(expression, ap.is_halved)
+        check_result = d20.roll(expression)
+        embed.description = f"{check_result}"
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
     return embed
