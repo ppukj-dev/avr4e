@@ -812,7 +812,10 @@ def create_embed(data_dict: dict) -> discord.Embed:
             if is_formatted_number(str(value)):
                 field_value = field_value + f"{field_name} {value}, "
                 continue
-            field_value = field_value + f"**{field_name}**: {value}\n"
+            if field_name:
+                field_value = field_value + f"**{field_name}**: {value}\n"
+            else:
+                field_value = field_value + f"{value}\n"
         field_value = field_value.rstrip(", ")
         field_value = field_value.rstrip()
         embed.add_field(name=category, value=field_value, inline=False)
