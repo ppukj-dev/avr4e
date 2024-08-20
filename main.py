@@ -467,15 +467,27 @@ def parse_command(message) -> ActionParam:
         param.targets.append(target)
 
     if len(param.targets) == 0:
-        param.targets.append(
-            TargetParam(
-                name="Meta",
-                damage_bonus=param.damage_bonus,
-                d20_bonus=param.d20_bonus,
-                is_adv=param.is_adv,
-                is_dis=param.is_dis
+        if param.multiroll > 1:
+            for i in range(param.multiroll):
+                param.targets.append(
+                    TargetParam(
+                        name=f"Attack {i+1}",
+                        damage_bonus=param.damage_bonus,
+                        d20_bonus=param.d20_bonus,
+                        is_adv=param.is_adv,
+                        is_dis=param.is_dis
+                    )
+                )
+        else:
+            param.targets.append(
+                TargetParam(
+                    name="Meta",
+                    damage_bonus=param.damage_bonus,
+                    d20_bonus=param.d20_bonus,
+                    is_adv=param.is_adv,
+                    is_dis=param.is_dis
+                )
             )
-        )
 
     return param
 
