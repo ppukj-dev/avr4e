@@ -356,7 +356,10 @@ def create_action_list_embed(name, df):
             usages = ""
             if row['MaxUsages'] > 0:
                 usages = f" ({row['Usages']}/{row['MaxUsages']})"
-            description += f"- **{row['Name']}** ({row['Type2']})."
+            type2 = ""
+            if row['Type2']:
+                type2 = f" ({row['Type2']})"
+            description += f"- **{row['Name']}**{type2}."
             description += f" {row['ShortDesc']}{usages}\n"
         embed.add_field(name=type1, value=description, inline=False)
     return embed
