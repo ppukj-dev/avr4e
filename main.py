@@ -394,9 +394,11 @@ async def handle_action(command, df, ctx, data, sheet_id):
 
 
 def parse_command(message) -> ActionParam:
-    list_of_args = [
-        "-b", "-d", "adv", "dis", "-h",
-        "-crit", "-u", "-adv", "-dis", "crit"
+    appended_args = [
+        "-b", "-d", "adv", "dis", "-adv", "-dis"
+    ]
+    general_args = [
+        "-h", "-crit", "-u", "crit"
     ]
     dict_of_args = {
         "-b": -1,
@@ -408,6 +410,12 @@ def parse_command(message) -> ActionParam:
         "-u": -1
     }
 
+    # for general args
+    splitted_message = shlex.split(message)
+    for idx, arg in enumerate(splitted_message):
+        if arg in general_args:
+            dict_of_args[arg] = idx
+
     splitted_message = message.split("-t")
     if len(splitted_message) < 1:
         return None
@@ -417,9 +425,10 @@ def parse_command(message) -> ActionParam:
     first_arg_idx = 99
     splitted_message = shlex.split(message)
     for idx, arg in enumerate(splitted_message):
-        if arg in list_of_args:
+        if arg in appended_args or arg in general_args:
             if idx < first_arg_idx:
                 first_arg_idx = idx
+        if arg in appended_args:
             dict_of_args[arg] = idx
     action = " ".join(splitted_message[:first_arg_idx])
 
