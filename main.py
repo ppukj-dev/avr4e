@@ -232,6 +232,10 @@ async def update_sheet(ctx, url=""):
         )
         madf = madf.drop(columns=['Usages_old'])
 
+        # update usages if old_usages is not int
+        if madf["Usages"].dtype != 'int64':
+            madf = actions_data
+
         name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
         charaRepo.set_character(
             ctx.guild.id,
