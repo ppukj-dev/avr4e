@@ -26,7 +26,11 @@ from PIL import Image, ImageOps, ImageDraw
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-bot = commands.Bot(command_prefix=";;", intents=discord.Intents.all())
+bot = commands.Bot(
+    command_prefix=";;",
+    intents=discord.Intents.all(),
+    help_command=None
+)
 
 app = FastAPI()
 origins = [
@@ -116,7 +120,7 @@ def find_inline_roll(content: str):
     return re.findall(pattern=pattern, string=content)
 
 
-def get_server_id(url):
+def get_server_id(url: str):
     pattern = r"https://discord.com/channels/(\d+)/(\d+)"
     match = re.search(pattern, url)
 
@@ -126,7 +130,7 @@ def get_server_id(url):
         return None
 
 
-def get_channel_id(url):
+def get_channel_id(url: str):
     pattern = r"https://discord.com/channels/(\d+)/(\d+)"
     match = re.search(pattern, url)
 
@@ -162,8 +166,41 @@ async def ping(ctx):
     await ctx.send("Pong!")
 
 
+@bot.command()
+async def help(ctx):
+    embed = discord.Embed()
+    embed.title = "Avr4e Commands"
+    desc = ""
+    desc += "## Commands List\n"
+    desc += "- Add to Discord: `;;add <link to sheet>`\n"
+    desc += "- Update: `;;update`\n"
+    desc += "\n"
+    desc += "### Actions\n"
+    desc += "- List: `;;a`\n"
+    desc += "- Do action: `;;a <action name>`\n"
+    desc += "- Checks: `;;c <skill name>`\n"
+    desc += "- Action & Check Modifiers:\n"
+    desc += "  - Adv/Dis: `;;a <action> adv/dis` `;;c <skill> adv/dis`\n"
+    desc += "  - Situational Modifier: `;;a <action> -b <amount>` "
+    desc += "`;;c <skill> -b <amount>`\n"
+    desc += "  - Human Mode: `;;a <action> -h` `;;c <skill> -h`\n"
+    desc += "  - Multiroll X times: `;;a <action> -rr X` `;;c <skill> -rr X`\n"
+    desc += "  - Action Only:\n"
+    desc += "    - Situational Damage: `;;a <action> -d <amount>`\n"
+    desc += "    - Multi Target: `;;a <action> -t <target1> -t <target2>`\n"
+    desc += "    - Use X Power Point: `;;action <action_name> -u X`\n"
+    desc += "    - Autocrit: `;;a <action_name> crit`\n"
+    desc += "\n"
+    desc += "**Taking Rest**\n"
+    desc += "- Short Rest: `;;reset sr`\n"
+    desc += "- Extended Rest: `;;reset`"
+    embed.description = desc
+
+    await ctx.send(embed=embed)
+
+
 @bot.command(aliases=["add"])
-async def add_sheet(ctx, url=""):
+async def add_sheet(ctx: commands.Context, url=""):
     try:
         spreadsheet_id = get_spreadsheet_id(url)
         if spreadsheet_id == "":
@@ -199,7 +236,7 @@ async def add_sheet(ctx, url=""):
 
 
 @bot.command(aliases=["update"])
-async def update_sheet(ctx, url=""):
+async def update_sheet(ctx: commands.Context, url=""):
     try:
         charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
@@ -253,7 +290,7 @@ async def update_sheet(ctx, url=""):
 
 
 @bot.command(aliases=["sheet"])
-async def char(ctx):
+async def char(ctx: commands.Context):
     charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
     df_data = pd.read_json(io.StringIO(character[2]))
@@ -264,7 +301,7 @@ async def char(ctx):
 
 
 @bot.command()
-async def reset(ctx, *, args=None):
+async def reset(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
         charaRepo = CharacterUserMapRepository()
@@ -294,7 +331,7 @@ async def reset(ctx, *, args=None):
 
 
 @bot.command(aliases=["a"])
-async def action(ctx, *, args=None):
+async def action(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
         charaRepo = CharacterUserMapRepository()
@@ -317,7 +354,7 @@ async def action(ctx, *, args=None):
 
 
 @bot.command()
-async def token(ctx, *, args=None):
+async def token(ctx: commands.Context, *, args=None):
     try:
         if args is None:
             await ctx.message.delete()
@@ -347,7 +384,7 @@ async def token(ctx, *, args=None):
         await ctx.send("Error. Please check input again.")
 
 
-def create_action_list_embed(name, df):
+def create_action_list_embed(name: str, df: pd.DataFrame):
     embed = discord.Embed()
     embed.title = f"{name}'s Actions"
     for type1 in df['Type1'].unique().tolist():
@@ -365,7 +402,12 @@ def create_action_list_embed(name, df):
     return embed
 
 
-async def handle_action(command, df, ctx, data, sheet_id):
+async def handle_action(
+        command: str,
+        df: pd.DataFrame,
+        ctx: commands.Context,
+        data: pd.DataFrame,
+        sheet_id: str):
     ap = parse_command(command)
     possible_action = df[df['Name'].str.contains(
         ap.name,
@@ -405,7 +447,7 @@ async def handle_action(command, df, ctx, data, sheet_id):
     return embed
 
 
-def parse_command(message) -> ActionParam:
+def parse_command(message: str) -> ActionParam:
     appended_args = [
         "-b", "-d", "adv", "dis", "-adv", "-dis"
     ]
@@ -503,7 +545,7 @@ def parse_command(message) -> ActionParam:
     return param
 
 
-def parse_target_param(message) -> TargetParam:
+def parse_target_param(message: str) -> TargetParam:
     list_of_args = [
         "-b", "-d", "adv", "dis", "-dis", "-adv"
     ]
@@ -556,7 +598,9 @@ def translate_cvar(message, df):
 
 
 async def get_user_choice(
-        choices, column_name, ctx: discord.ext.commands.Context):
+        choices: pd.DataFrame,
+        column_name: str,
+        ctx: commands.Context):
     idx = 1
     list = ""
     for _, name in choices[column_name].items():
@@ -594,7 +638,10 @@ async def get_user_choice(
 
 
 def create_action_result_embed(
-        possible_action, choosen, name, ap: ActionParam):
+        possible_action: pd.DataFrame,
+        choosen: int,
+        name: str,
+        ap: ActionParam):
     embed = discord.Embed()
     action_name = possible_action['Name'].iloc[choosen]
     embed_description = ""
@@ -612,7 +659,7 @@ def create_action_result_embed(
         critdie = format_bonus(str(possible_action['Critdie'].iloc[choosen]))
     meta = ""
 
-    def is_aoe(range):
+    def is_aoe(range: str):
         if (
             range.lower().find("close") != -1 or
             range.lower().find("area") != -1
@@ -674,7 +721,7 @@ def create_action_result_embed(
 
 
 @bot.command(aliases=["c"])
-async def check(ctx, *, args=None):
+async def check(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
         if args is None:
@@ -694,7 +741,11 @@ async def check(ctx, *, args=None):
         await ctx.send("Error. Please check input again.")
 
 
-def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
+def create_check_result_embed(
+        possible_check: pd.DataFrame,
+        choosen: int,
+        name: str,
+        ap: ActionParam):
     embed = discord.Embed()
     modifier = possible_check['value'].iloc[choosen]
     check_name = possible_check['field_name'].iloc[choosen]
@@ -734,7 +785,11 @@ def create_check_result_embed(possible_check, choosen, name, ap: ActionParam):
     return embed
 
 
-async def handle_check(command, df, ctx, name):
+async def handle_check(
+        command: str,
+        df: pd.DataFrame,
+        ctx: commands.Context,
+        name: str):
     ap = parse_command(command)
     rollable_check = df[df['is_rollable'] == 'TRUE']
     possible_check = rollable_check[rollable_check['field_name'].str.contains(
@@ -753,7 +808,7 @@ async def handle_check(command, df, ctx, name):
     return create_check_result_embed(possible_check, choosen, name, ap)
 
 
-def get_spreadsheet_id(url):
+def get_spreadsheet_id(url: str):
     # Regular expression to match the spreadsheet ID in the URL
     pattern = r"/spreadsheets/d/([a-zA-Z0-9-_]+)"
     match = re.search(pattern, url)
@@ -777,7 +832,7 @@ def get_df(spreadsheet_id: str, sheet_name: str):
     return pd.DataFrame(data)
 
 
-def create_data_dict(df) -> dict:
+def create_data_dict(df: pd.DataFrame) -> dict:
     result = {}
     for _, row in df.iterrows():
         category = row['category']
@@ -838,7 +893,7 @@ def format_bonus(value: str) -> str:
         return "+" + value
 
 
-def is_formatted_number(string):
+def is_formatted_number(string: str):
     pattern = r'^[+-]\d+$'
     return bool(re.match(pattern, string))
 
@@ -850,7 +905,7 @@ def draw_quota(max_usages: int, usages: int) -> str:
     return usages * "◉" + used * "〇"
 
 
-def halve_flat_modifiers(expression):
+def halve_flat_modifiers(expression: str):
     def halve_match(match):
         sign = match.group(1)
         halved_value = f"({match.group(2)}/2)"
@@ -880,7 +935,7 @@ def crit_damage_expression(expression: str):
     return modified_expression
 
 
-def add_border_template(url, template_path, name=""):
+def add_border_template(url: str, template_path: str, name=""):
     response = requests.get(url)
     if response.status_code != 200:
         raise Exception(f"Failed to download image: {response.status_code}")
@@ -947,7 +1002,7 @@ async def check_timestamps():
         print(e, traceback.format_exc())    
 
 
-def two_digit(number):
+def two_digit(number: int):
     if number < 10:
         return f"0{number}"
     return str(number)
