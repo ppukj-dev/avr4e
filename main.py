@@ -259,21 +259,18 @@ async def update_sheet(ctx: commands.Context, url=""):
         df_data = df_data.replace('#REF!', None)
         df_data = df_data.dropna()
 
+        old_actions_data['Usages_numeric'] = pd.to_numeric(
+            old_actions_data['Usages'], errors='coerce').fillna(0)
         madf = pd.merge(
             actions_data,
-            old_actions_data[['Name', 'Usages']],
+            old_actions_data[['Name', 'Usages_numeric']],
             on='Name',
-            how='left',
-            suffixes=('', '_old')
+            how='left'
         )
-        madf['Usages'] = madf['Usages_old'].combine_first(
+        madf['Usages'] = madf['Usages_numeric'].combine_first(
             madf['Usages']
         )
-        madf = madf.drop(columns=['Usages_old'])
-
-        # update usages if old_usages is not int
-        if madf["Usages"].dtype != 'int64':
-            madf = actions_data
+        madf = madf.drop(columns=['Usages_numeric'])
 
         name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
         charaRepo.set_character(
