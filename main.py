@@ -16,6 +16,7 @@ import traceback
 from discord.ext import commands, tasks
 import datetime
 from repository import CharacterUserMapRepository
+from pagination import Paginator
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass, Field
 from fastapi import FastAPI
@@ -338,7 +339,12 @@ async def action(ctx: commands.Context, *, args=None):
         data = pd.read_json(io.StringIO(character[2]))
         actions = pd.read_json(io.StringIO(character[3]))
         if args is None:
-            embed = create_action_list_embed(name, actions)
+            embeds = create_action_list_embed(name, actions)
+            view = Paginator(ctx.author, embeds)
+            if len(embeds) <= 1:
+                view = None
+            await ctx.send(embed=embeds[0], view=view)
+            return
         else:
             args = translate_cvar(args, data)
             embed = await handle_action(args, actions, ctx, data, sheet_id)
@@ -382,21 +388,47 @@ async def token(ctx: commands.Context, *, args=None):
 
 
 def create_action_list_embed(name: str, df: pd.DataFrame):
-    embed = discord.Embed()
-    embed.title = f"{name}'s Actions"
+    max_length_description = 2500
+    field_dict = {}
+    embeds = []
+    description = ""
+    # embed.title = f"{name}'s Actions"
     for type1 in df['Type1'].unique().tolist():
-        description = ""
-        for i, row in df[df['Type1'] == type1].iterrows():
+        field_dict[type1] = ""
+        for _, row in df[df['Type1'] == type1].iterrows():
             usages = ""
             if row['MaxUsages'] > 0:
                 usages = f" ({row['Usages']}/{row['MaxUsages']})"
             type2 = ""
             if row['Type2']:
                 type2 = f" ({row['Type2']})"
-            description += f"- **{row['Name']}**{type2}."
-            description += f" {row['ShortDesc']}{usages}\n"
-        embed.add_field(name=type1, value=description, inline=False)
-    return embed
+            field_dict[type1] += f"- **{row['Name']}**{type2}."
+            field_dict[type1] += f" {row['ShortDesc']}{usages}\n"
+
+    for key, value in field_dict.items():
+        if key != "":
+            description += f"### {key}\n"
+        description += value
+
+    i = 1
+    while len(description) > max_length_description:
+        embed = discord.Embed()
+        embed.title = f"{name}'s Actions"
+        newline_index = description[:max_length_description].rfind("\n")
+        embed.description = description[:newline_index]
+        embed.set_footer(text=f"Page {i}")
+        embeds.append(embed)
+        description = description[newline_index:]
+        i += 1
+
+    embed = discord.Embed()
+    embed.title = f"{name}'s Actions"
+    embed.description = description
+    if i > 1:
+        embed.set_footer(text=f"Page {i}")
+    embeds.append(embed)
+
+    return embeds
 
 
 async def handle_action(
