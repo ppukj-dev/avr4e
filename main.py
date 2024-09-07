@@ -1000,21 +1000,15 @@ times = [
 @tasks.loop(time=times)
 async def check_timestamps():
     channel_calendar = bot.get_channel(1265647805867888741)
-    # channel_ooc = bot.get_channel(939933100752924693)
     start_date = datetime.datetime(2024, 8, 17, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     delta = now - start_date
-    total_sessions = int(1 + delta.total_seconds() // (60 * 60 * 12))
+    total_sessions = int(delta.total_seconds() // (60 * 60 * 12))
     start_month = 2
-    month_number = int((start_month + ((total_sessions-1) // 7)) % 12)
-    chapter_number = total_sessions // 15 + 1
-    # month_list = [
-    #     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    #     "Juli", "Agustus", "September", "Oktober", "November",
-    #     "Desember"
-    # ]
-    # month = month_list[month_number]
+    month_number = int((start_month + (total_sessions // 7)) % 12)
+    chapter_number = total_sessions // 14 + 1
     month = f"月 {month_number+1:02}"
+    session_number = f"{total_sessions+1:02}"
     month_season_dict = {
         3: "🌸", 4: "🌸", 5: "🌸",
         6: "🌞", 7: "🌞", 8: "🌞",
@@ -1022,9 +1016,7 @@ async def check_timestamps():
         12: "❄️", 1: "❄️", 2: "❄️"
     }
     season = month_season_dict[month_number+1]
-    session_number = two_digit(total_sessions)
     channel_name = f"📅 {month} {season} - {chapter_number}.{session_number}"
-    # await channel_ooc.send("Ganti Tanggal")
     try:
         await channel_calendar.edit(name=channel_name)
     except Exception as e:
