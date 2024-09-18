@@ -216,6 +216,9 @@ async def add_sheet(ctx: commands.Context, url=""):
         actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0, )
         actions_data['Usages'] = actions_data['Usages'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None, )
+        actions_data = actions_data[
+            actions_data['Name'].str.strip().astype(bool)
+        ]
         actions_data = actions_data.dropna()
         df_data = df_data.replace('#REF!', None)
         df_data = df_data.dropna()
@@ -256,6 +259,9 @@ async def update_sheet(ctx: commands.Context, url=""):
         actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0)
         actions_data['Usages'] = actions_data['Usages'].replace('', 0)
         actions_data = actions_data.replace('#REF!', None)
+        actions_data = actions_data[
+            actions_data['Name'].str.strip().astype(bool)
+        ]
         actions_data = actions_data.dropna()
         df_data = df_data.replace('#REF!', None)
         df_data = df_data.dropna()
