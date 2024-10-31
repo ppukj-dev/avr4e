@@ -158,7 +158,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
-    check_timestamps.start()
+    # check_timestamps.start()
     print("We have logged in as {0.user}".format(bot))
 
 
