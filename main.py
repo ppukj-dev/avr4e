@@ -1,3 +1,4 @@
+import random
 import discord.ext.commands
 import pandas as pd
 import asyncio
@@ -15,7 +16,7 @@ import requests
 import traceback
 from discord.ext import commands, tasks
 import datetime
-from repository import CharacterUserMapRepository
+from repository import CharacterUserMapRepository, GachaMapRepository
 from pagination import Paginator
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass, Field
@@ -867,6 +868,15 @@ def get_df(spreadsheet_id: str, sheet_name: str):
     return pd.DataFrame(data)
 
 
+def get_all_sheets(spreadsheet_id: str) -> list:
+    creds = None
+    with open("credentials.json") as f:
+        creds = json.load(f)
+    gc = gspread.service_account_from_dict(creds)
+    sheet = gc.open_by_key(spreadsheet_id)
+    return sheet.worksheets()
+
+
 def create_data_dict(df: pd.DataFrame) -> dict:
     result = {}
     for _, row in df.iterrows():
@@ -1026,7 +1036,7 @@ async def check_timestamps():
     try:
         await channel_calendar.edit(name=channel_name)
     except Exception as e:
-        print(e, traceback.format_exc())    
+        print(e, traceback.format_exc())
 
 
 def two_digit(number: int):
@@ -1039,6 +1049,169 @@ def main():
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
     # bot.run(TOKEN)
     pass
+
+
+@bot.command()
+async def gacha(ctx: commands.Context):
+    try:
+        await ctx.message.delete()
+        gachaRepo = GachaMapRepository()
+        data = gachaRepo.get_gacha(ctx.guild.id)
+        if data is None:
+            await ctx.send("No gacha sheet is found.")
+            return
+        start = json.loads(data[2])
+        df_dict = json.loads(data[3])
+        url = data[4]
+        spreadsheet_id = get_spreadsheet_id(url)
+        sheet = get_sheet_to_roll(start)
+        if sheet == "":
+            await ctx.send("No sheet found.")
+            return
+        sheet_dict = df_dict[sheet]
+        result = get_random_from_sheet(sheet_dict)
+        embed = discord.Embed()
+        embed.title = "Gacha Result"
+        embed.description = f"**{sheet.title()}**: {result}"
+        await ctx.send(embed=embed)
+        create_gacha_log_df(
+            spreadsheet_id,
+            ctx.channel.id,
+            ctx.channel.name,
+            ctx.author.id,
+            ctx.author.name,
+            result
+        )
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+
+def get_sheet_to_roll(start: dict) -> str:
+    thresholds = list(start['maxDice'].values())
+    results = list(start['sheet'].values())
+    max_value = max(thresholds)
+    roll = random.randint(1, max_value)
+    for i in range(len(thresholds)):
+        if roll <= thresholds[i]:
+            return results[i]
+    return ""
+
+
+def get_random_from_sheet(sheet_dict: dict) -> str:
+    random_value = random.choice(list(sheet_dict["value"].values()))
+    return random_value
+
+
+@bot.command(aliases=["gs"])
+async def gacha_sheet(ctx: commands.Context, url: str = ""):
+    try:
+        await ctx.message.delete()
+        if url == "":
+            await ctx.send("Please provide a url")
+            return
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        sheets = get_all_sheets(spreadsheet_id)
+        if len(sheets) == 0:
+            await ctx.send("No sheets found")
+            return
+        df_dict = {}
+        for sheet in sheets:
+            temp_df = get_df(spreadsheet_id, sheet.title)
+            temp_df = temp_df.replace('#REF!', None, )
+            temp_df = temp_df.dropna()
+            if sheet.title == "log":
+                continue
+            if sheet.title == "start":
+                temp_df = temp_df.sort_values(by="maxDice", ascending=True)
+                start = temp_df.to_dict()
+                print(start)
+                continue
+            df_dict[sheet.title] = temp_df.to_dict()
+        gachaRepo = GachaMapRepository()
+        gachaRepo.set_gacha(
+            guild_id=ctx.guild.id,
+            start=json.dumps(start),
+            items=json.dumps(df_dict),
+            sheet_url=url
+        )
+        chances = calculate_gacha_chance(start)
+        embed = discord.Embed()
+        embed.title = "Gacha"
+        embed.description = "Chances of getting each sheet are:"
+        for sheet, chance in chances:
+            embed.add_field(name=sheet, value=f"{chance} %", inline=False)
+        await ctx.send(
+                content=f"New Gacha [Spreadsheet]({url}) is added.",
+                embed=embed
+            )
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+    return
+
+
+def calculate_gacha_chance(data: dict):
+    chances = []
+    thresholds = list(data["maxDice"].values())
+    sheets = list(data['sheet'].values())
+    chances = []
+    max_value = max(thresholds)
+    for i in range(len(thresholds)):
+        if i == 0:
+            chance = thresholds[0]
+        else:
+            chance = thresholds[i] - thresholds[i - 1]
+        percentage = (chance / max_value) * 100
+        chances.append((sheets[i], round(percentage, 2)))
+
+    return chances
+
+
+def log_result_to_sheet(spreadsheet_id: str, df: pd.DataFrame):
+    creds = None
+    with open("credentials.json") as f:
+        creds = json.load(f)
+    gc = gspread.service_account_from_dict(creds)
+    sheet = gc.open_by_key(spreadsheet_id)
+
+    try:
+        worksheet = sheet.worksheet("log")
+    except gspread.exceptions.WorksheetNotFound:
+        worksheet = sheet.add_worksheet(title="log", rows="100", cols="10")
+        worksheet.append_rows([df.columns.values.tolist()])
+    worksheet.append_rows(df.values.tolist())
+
+    return
+
+
+def create_gacha_log_df(
+            spreadsheet_id: str,
+            channel_id: int,
+            channel_name: str,
+            user_id: int,
+            user_name: str,
+            result: str
+        ) -> bool:
+    try:
+        data = {
+            "timestamp":
+                [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+            "channel_id": [str(channel_id)],
+            "channel_name": [channel_name],
+            "user_id": [str(user_id)],
+            "user_name": [user_name],
+            "result": [result]
+        }
+        log_df = pd.DataFrame(data=data)
+        log_result_to_sheet(spreadsheet_id, log_df)
+        return True
+    except Exception as e:
+        print(e, traceback.format_exc())
+        return False
 
 
 if __name__ == "__main__":
