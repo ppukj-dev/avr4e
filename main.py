@@ -11,12 +11,14 @@ import gspread
 import shlex
 import json
 import io
-import uvicorn
+# import uvicorn
 import requests
 import traceback
 from discord.ext import commands, tasks
 import datetime
 from repository import CharacterUserMapRepository, GachaMapRepository
+from repository import MonsterListRepository
+import constant
 from pagination import Paginator
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass, Field
@@ -1046,8 +1048,8 @@ def two_digit(number: int):
 
 
 def main():
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
-    # bot.run(TOKEN)
+    # uvicorn.run(app, host="0.0.0.0", port=int(os.getenv('APP_PORT')))
+    bot.run(TOKEN)
     pass
 
 
@@ -1212,6 +1214,133 @@ def create_gacha_log_df(
     except Exception as e:
         print(e, traceback.format_exc())
         return False
+
+
+@bot.command(aliases=["budget"])
+async def budget_calc(ctx: commands.Context, party_level: int, chara: int):
+    await ctx.message.delete()
+    embed = discord.Embed()
+    embed.title = "XP Calculation"
+    embed.url = "https://iws.mx/dnd/?view=glossary672"
+    embed.description = (
+        f"**Party Level**: {party_level}\n"
+        f"**Character Count**: {chara}\n"
+        "\n"
+    )
+    # easy_budget_floor = get_budget(avg_level-2, chara)
+    easy_budget_ceil = get_budget(party_level-1, chara)
+    # normal_budget_floor = get_budget(avg_level, chara)
+    normal_budget_ceil = get_budget(party_level+1, chara)
+    # hard_budget_floor = get_budget(avg_level+2, chara)
+    hard_budget_ceil = get_budget(party_level+4, chara)
+    embed.description += (
+        f"**Easy**: {easy_budget_ceil}\n"
+        f"**Normal**: {normal_budget_ceil}\n"
+        f"**Hard**: {hard_budget_ceil}\n"
+    )
+    embed.set_footer(
+        text="Rules Compendium, page(s) 285."
+    )
+    await ctx.send(embed=embed)
+
+
+@bot.command(aliases=["generate", "gen_enc"])
+async def generate_random_encounter(
+        ctx: commands.Context,
+        party_level: int = 1,
+        chara: int = 5,
+        difficulty: str = "normal"):
+    if (
+            difficulty not in ["easy", "normal", "hard"] and
+            not difficulty.isnumeric()):
+        await ctx.send("Difficulty must be easy/normal/hard/number.")
+        return
+    if difficulty == "easy":
+        floor, ceil = party_level-2, party_level-1
+        min_xp, max_xp = get_budget(floor, chara), get_budget(ceil, chara)
+    elif difficulty == "normal":
+        floor, ceil = party_level, party_level+1
+        min_xp, max_xp = get_budget(floor, chara), get_budget(ceil, chara)
+    elif difficulty == "hard":
+        floor, ceil = party_level+2, party_level+4
+        min_xp, max_xp = get_budget(floor, chara), get_budget(ceil, chara)
+    else:
+        floor, ceil = party_level, party_level
+        min_xp, max_xp = 0.9 * int(difficulty), int(difficulty)
+    floor = max(floor-3, 1)
+    ceil = min(ceil+3, 32)
+    levels = list(range(floor, ceil+1))
+    monsterRepo = MonsterListRepository()
+    monster_list = monsterRepo.get_monsters_by_levels(levels)
+    if monster_list is None:
+        await ctx.send("No monsters found.")
+        return None
+    encounter, total_xp = generate_encounter(min_xp, max_xp, monster_list)
+    embed = discord.Embed()
+    embed.title = "Encounter Generation"
+    embed.description = (
+        f"**Party Level**: {party_level}\n"
+        f"**Character Count**: {chara}\n"
+        "\n"
+    )
+    for monster_id, (monster_data, count) in encounter.items():
+        monster_name = monster_data[1]
+        monster_xp = monster_data[-1]
+        monster_group = monster_data[4]
+        monster_role = monster_data[3]
+        url = f"https://iws.mx/dnd/?view={monster_data[0]}"
+        embed.description += (
+            f"**{count}x "
+            f"[{monster_name}]({url})**:  "
+            f"{monster_group} {monster_role} ({monster_xp} XP)\n"
+        )
+    embed.description += (
+        f"\n**Total XP**: {total_xp}\n"
+        f"**Budget**: {difficulty.title()}\n"
+    )
+    await ctx.send(embed=embed)
+    return
+
+
+def generate_encounter(min_xp, max_xp, monster_list):
+    encounter = {}  # key: monster_id, value: (monster_data, count)
+    total_xp = 0
+
+    while total_xp < min_xp:
+        # Filter for monsters that can fit within remaining XP
+        possible_monsters = [m for m in monster_list if m[-1] > 0 and
+                             total_xp + m[-1] <= max_xp]
+        if not possible_monsters:
+            break  # No valid monsters to add
+
+        chosen_monster = random.choice(possible_monsters)
+        monster_id = chosen_monster[0]
+        monster_xp = chosen_monster[-1]
+
+        max_count = (max_xp - total_xp) // monster_xp
+        if max_count == 0:
+            continue  # Can't add even one of this monster
+
+        monster_group = chosen_monster[4]
+        if monster_group.lower() == "solo":
+            max_count = min(max_count, 1)
+        count = random.randint(1, max_count)
+
+        if monster_id in encounter:
+            encounter[monster_id] = (chosen_monster, encounter[monster_id][1]
+                                     + count)
+        else:
+            encounter[monster_id] = (chosen_monster, count)
+
+        total_xp += monster_xp * count
+
+    return encounter, total_xp
+
+
+def get_budget(avg_level: int, chara: int) -> int:
+    if avg_level < 0 or avg_level >= len(constant.XP_LEVEL_LIST):
+        return 0
+    return constant.XP_LEVEL_LIST[avg_level] * chara
 
 
 if __name__ == "__main__":

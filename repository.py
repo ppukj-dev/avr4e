@@ -1,4 +1,13 @@
+import os
 import sqlite3
+import mysql.connector
+import dotenv
+
+dotenv.load_dotenv()
+MYSQL_HOST = os.getenv("MYSQL_HOST")
+MYSQL_USER = os.getenv("MYSQL_USER")
+MYSQL_PASS = os.getenv("MYSQL_PASS")
+MYSQL_DB = os.getenv("MYSQL_DB")
 
 
 class Repository:
@@ -176,3 +185,49 @@ class GachaMapRepository(Repository):
         with self as db:
             db.cursor.execute(query, (start, items, id))
             db.connection.commit()
+
+
+class MySQLRepository:
+    def __init__(self):
+        self.host = MYSQL_HOST
+        self.user = MYSQL_USER
+        self.password = MYSQL_PASS
+        self.database = MYSQL_DB
+
+    def __enter__(self):
+        self.connection = mysql.connector.connect(
+            host=self.host,
+            user=self.user,
+            password=self.password,
+            database=self.database
+        )
+        self.cursor = self.connection.cursor()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.cursor.close()
+        self.connection.close()
+
+
+class MonsterListRepository(MySQLRepository):
+    def __init__(self):
+        super().__init__()
+
+    def get_monster_list(self):
+        query = "SELECT * FROM monster_list LIMIT 10"
+        with self as db:
+            db.cursor.execute(query)
+            result = db.cursor.fetchall()
+        return result
+
+    def get_monsters_by_levels(self, levels: list):
+        query = (
+            "SELECT"
+            "   id, name, level, role, `group`, size, type, source, xp "
+            "FROM monster_list WHERE level IN (%s)"
+            % ','.join(['%s'] * len(levels))
+        )
+        with self as db:
+            db.cursor.execute(query, tuple(levels))
+            result = db.cursor.fetchall()
+        return result
