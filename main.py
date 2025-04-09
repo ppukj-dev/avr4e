@@ -1,5 +1,4 @@
 import random
-import discord.ext.commands
 import pandas as pd
 import asyncio
 import discord
@@ -1326,6 +1325,10 @@ def generate_encounter(min_xp, max_xp, monster_list):
         monster_group = chosen_monster[4]
         if monster_group.lower() == "solo":
             max_count = min(max_count, 1)
+            if monster_id in encounter:
+                continue
+        else:
+            max_count = min(max_count, 16)
         count = random.randint(1, max_count)
 
         if monster_id in encounter:
