@@ -1285,6 +1285,7 @@ async def generate_random_encounter(
     )
     for monster_id, (monster_data, count) in encounter.items():
         monster_name = monster_data[1]
+        monster_level = monster_data[2]
         monster_xp = monster_data[-1]
         monster_group = monster_data[4]
         monster_role = monster_data[3]
@@ -1292,7 +1293,8 @@ async def generate_random_encounter(
         embed.description += (
             f"**{count}x "
             f"[{monster_name}]({url})**:  "
-            f"{monster_group} {monster_role} ({monster_xp} XP)\n"
+            f"L{monster_level} {monster_group} "
+            f"{monster_role} ({monster_xp} XP)\n"
         )
     embed.description += (
         f"\n**Total XP**: {total_xp}\n"
