@@ -5,7 +5,6 @@ import discord
 import re
 import os
 import d20
-import discord.ext
 import gspread
 import shlex
 import json
