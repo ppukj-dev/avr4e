@@ -1370,6 +1370,7 @@ async def random_generator_ui(
             interaction: discord.Interaction = None):
         channel = interaction.channel
         user = interaction.user
+        keywords = []
         max_budget = {}
         min_budget = {}
         floor = {}
