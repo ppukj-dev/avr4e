@@ -237,13 +237,43 @@ class MonsterListRepository(MySQLRepository):
         role_conditions = ' OR '.join(['role LIKE %s' for _ in roles])
 
         query = (
-            f"SELECT id, name, level, role, `group`, size, type, source, xp "
+            f"SELECT "
+            f"  id, name, level, role, `group`, "
+            f"  size, type, source, description, xp "
             f"FROM monster_list "
             f"WHERE level IN ({level_placeholders}) AND ({role_conditions})"
         )
 
         # Prepare values: levels stay the same, roles are formatted for LIKE
         values = tuple(levels) + tuple(f"%{role}%" for role in roles)
+
+        with self as db:
+            db.cursor.execute(query, values)
+            result = db.cursor.fetchall()
+        return result
+
+    def get_monsters_by_levels_roles_and_keywords(
+            self, levels: list, roles: list, keywords: list):
+        level_placeholders = ','.join(['%s'] * len(levels))
+        role_conditions = ' OR '.join(['role LIKE %s' for _ in roles])
+        keyword_conditions = ' AND '.join(
+            ["description LIKE %s" for _ in keywords])
+
+        # Construct the full query with levels, roles, and keywords
+        query = (
+            f"SELECT "
+            f"  id, name, level, role, `group`, "
+            f"  size, type, source, xp "
+            f"FROM monster_list "
+            f"WHERE level IN ({level_placeholders}) AND ({role_conditions})"
+            f" AND ({keyword_conditions})"
+        )
+
+        values = (
+            tuple(levels) +
+            tuple(f"%{role}%" for role in roles) +
+            tuple(f"%{keyword}%" for keyword in keywords)
+        )
 
         with self as db:
             db.cursor.execute(query, values)

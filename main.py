@@ -1305,7 +1305,7 @@ async def generate_random_encounter(
     return
 
 
-def generate_encounter(min_xp, max_xp, monster_list):
+def generate_encounter(min_xp, max_xp, monster_list, keywords=[]):
     encounter = {}  # key: monster_id, value: (monster_data, count)
     total_xp = 0
 
@@ -1319,6 +1319,14 @@ def generate_encounter(min_xp, max_xp, monster_list):
         chosen_monster = random.choice(possible_monsters)
         monster_id = chosen_monster[0]
         monster_xp = chosen_monster[-1]
+        description = chosen_monster[8]
+
+        if keywords:
+            if not any(keyword.lower() in description.lower()
+                       for keyword in keywords):
+                if random.random() < 0.60:
+                    possible_monsters.remove(chosen_monster)
+                    continue
 
         max_count = (max_xp - total_xp) // monster_xp
         if max_count == 0:
@@ -1389,7 +1397,13 @@ async def random_generator_ui(
                 f"**Hard**: {max_budget['hard']}\n"
             )
             message = await channel.send(
-                content=f"Please input XP budget value. <@{user.id}>",
+                content=(
+                    f"Please input XP budget value. <@{user.id}>\n"
+                    f"If you have any keyword you want to use, please "
+                    f"add it together after a space.\nYou can add few, "
+                    f"separated by space.\n"
+                    f"e.g. `10000 prone slide`"
+                ),
                 embed=budget_embed
             )
             try:
@@ -1398,16 +1412,22 @@ async def random_generator_ui(
                     timeout=60.0,
                     check=lambda m: m.author == interaction.user
                 )
-                if reply.content.isnumeric():
-                    max_budget["custom"] = int(reply.content)
-                    min_budget["custom"] = 0.9 * int(reply.content)
+                custom_budget = reply.content.split()[0]
+                if len(reply.content.split()) > 1:
+                    keywords = reply.content.split()[1:]
+                if custom_budget.isnumeric():
+                    max_budget["custom"] = int(custom_budget)
+                    min_budget["custom"] = 0.9 * int(custom_budget)
                 else:
                     await channel.send("Invalid input.")
                     await reply.delete()
                     await message.delete()
                     return
-                await reply.delete()
-                await message.delete()
+                try:
+                    await reply.delete()
+                    await message.delete()
+                except Exception as e:
+                    print(e, traceback.format_exc())
             except asyncio.TimeoutError:
                 await message.delete()
                 await channel.send("Time Out")
@@ -1426,7 +1446,8 @@ async def random_generator_ui(
         encounter, total_xp = generate_encounter(
             min_xp=min_budget[difficulty],
             max_xp=max_budget[difficulty],
-            monster_list=monster_list
+            monster_list=monster_list,
+            keywords=keywords
             )
         embed = discord.Embed()
         embed.set_author(
