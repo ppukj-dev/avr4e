@@ -231,3 +231,21 @@ class MonsterListRepository(MySQLRepository):
             db.cursor.execute(query, tuple(levels))
             result = db.cursor.fetchall()
         return result
+
+    def get_monsters_by_levels_and_roles(self, levels: list, roles: list):
+        level_placeholders = ','.join(['%s'] * len(levels))
+        role_conditions = ' OR '.join(['role LIKE %s' for _ in roles])
+
+        query = (
+            f"SELECT id, name, level, role, `group`, size, type, source, xp "
+            f"FROM monster_list "
+            f"WHERE level IN ({level_placeholders}) AND ({role_conditions})"
+        )
+
+        # Prepare values: levels stay the same, roles are formatted for LIKE
+        values = tuple(levels) + tuple(f"%{role}%" for role in roles)
+
+        with self as db:
+            db.cursor.execute(query, values)
+            result = db.cursor.fetchall()
+        return result

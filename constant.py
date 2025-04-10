@@ -7,3 +7,8 @@ XP_LEVEL_LIST = [
     7000, 9000, 11000, 13000, 15000,
     190000, 23000, 27000
 ]
+
+MONSTER_ROLE_LIST = [
+    "Brute", "Artillery", "Skirmisher", "Controller",
+    "Lurker", "Leader"
+]

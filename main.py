@@ -13,6 +13,7 @@ import io
 import requests
 import traceback
 from discord.ext import commands, tasks
+from view import generator
 import datetime
 from repository import CharacterUserMapRepository, GachaMapRepository
 from repository import MonsterListRepository
@@ -160,6 +161,7 @@ def process_message(message: str) -> str:
 @bot.event
 async def on_ready():
     # check_timestamps.start()
+    await bot.tree.sync()
     print("We have logged in as {0.user}".format(bot))
 
 
@@ -1324,8 +1326,7 @@ def generate_encounter(min_xp, max_xp, monster_list):
         monster_group = chosen_monster[4]
         if monster_group.lower() == "solo":
             max_count = min(max_count, 1)
-            if monster_id in encounter:
-                continue
+            possible_monsters.remove(chosen_monster)
         else:
             max_count = min(max_count, 16)
         count = random.randint(1, max_count)
@@ -1345,6 +1346,120 @@ def get_budget(avg_level: int, chara: int) -> int:
     if avg_level < 0 or avg_level >= len(constant.XP_LEVEL_LIST):
         return 0
     return constant.XP_LEVEL_LIST[avg_level] * chara
+
+
+@bot.tree.command(name="generate", description="Random Encounter Generator")
+async def random_generator_ui(interaction: discord.Interaction):
+    async def generate_callback(
+            party_level: int = 1,
+            chara: int = 5,
+            difficulty: str = "normal",
+            role: list = None,
+            interaction: discord.Interaction = None):
+        channel = interaction.channel
+        user = interaction.user
+        max_budget = {}
+        min_budget = {}
+        floor = {}
+        ceil = {}
+        floor["easy"] = party_level - 2
+        ceil["easy"] = party_level - 1
+        min_budget["easy"] = get_budget(floor["easy"], chara)
+        max_budget["easy"] = get_budget(ceil["easy"], chara)
+        floor["normal"] = party_level
+        ceil["normal"] = party_level + 1
+        min_budget["normal"] = get_budget(floor["normal"], chara)
+        max_budget["normal"] = get_budget(ceil["normal"], chara)
+        floor["hard"] = party_level + 2
+        ceil["hard"] = party_level + 4
+        min_budget["hard"] = get_budget(floor["hard"], chara)
+        max_budget["hard"] = get_budget(ceil["hard"], chara)
+        floor["custom"] = party_level
+        ceil["custom"] = party_level
+        if difficulty == "custom":
+            budget_embed = discord.Embed()
+            budget_embed.title = "XP Budget for Reference"
+            budget_embed.description = (
+                f"**Easy**: {max_budget['easy']}\n"
+                f"**Normal**: {max_budget['normal']}\n"
+                f"**Hard**: {max_budget['hard']}\n"
+            )
+            message = await channel.send(
+                content=f"Please input XP budget value. <@{user.id}>",
+                embed=budget_embed
+            )
+            try:
+                reply = await bot.wait_for(
+                    "message",
+                    timeout=60.0,
+                    check=lambda m: m.author == interaction.user
+                )
+                if reply.content.isnumeric():
+                    max_budget["custom"] = int(reply.content)
+                    min_budget["custom"] = 0.9 * int(reply.content)
+                else:
+                    await channel.send("Invalid input.")
+                    await reply.delete()
+                    await message.delete()
+                    return
+                await reply.delete()
+                await message.delete()
+            except asyncio.TimeoutError:
+                await message.delete()
+                await channel.send("Time Out")
+                return
+        floor[difficulty] = max(floor[difficulty]-3, 1)
+        ceil[difficulty] = min(ceil[difficulty]+3, 32)
+        levels = list(range(floor[difficulty], ceil[difficulty]+1))
+        monsterRepo = MonsterListRepository()
+        monster_list = monsterRepo.get_monsters_by_levels_and_roles(
+            levels=levels,
+            roles=role
+        )
+        if monster_list is None:
+            await channel.send("No monsters found.")
+            return None
+        encounter, total_xp = generate_encounter(
+            min_xp=min_budget[difficulty],
+            max_xp=max_budget[difficulty],
+            monster_list=monster_list
+            )
+        embed = discord.Embed()
+        embed.set_author(
+            name=interaction.user.display_name,
+            icon_url=interaction.user.display_avatar.url
+        )
+        embed.title = "Encounter Generation"
+        embed.description = (
+            f"**Party Level**: {party_level}\n"
+            f"**Character Count**: {chara}\n"
+            "\n"
+        )
+        for monster_id, (monster_data, count) in encounter.items():
+            monster_name = monster_data[1]
+            monster_level = monster_data[2]
+            monster_xp = monster_data[-1]
+            monster_group = monster_data[4]
+            monster_role = monster_data[3]
+            url = f"https://iws.mx/dnd/?view={monster_data[0]}"
+            embed.description += (
+                f"**{count}x "
+                f"[{monster_name}]({url})**:  "
+                f"L{monster_level} {monster_group} "
+                f"{monster_role} ({monster_xp} XP)\n"
+            )
+        embed.description += (
+            f"\n**Total XP**: {total_xp}\n"
+            f"**Budget**: {max_budget[difficulty]}\n"
+        )
+        await channel.send(embed=embed)
+
+    view = generator.SelectionView(interaction.user, generate_callback)
+    await interaction.response.send_message(
+        content="Select an option below to continue:",
+        view=view,
+        ephemeral=True
+    )
 
 
 if __name__ == "__main__":
