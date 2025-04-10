@@ -1350,7 +1350,10 @@ def get_budget(avg_level: int, chara: int) -> int:
 
 
 @bot.tree.command(name="generate", description="Random Encounter Generator")
-async def random_generator_ui(interaction: discord.Interaction):
+async def random_generator_ui(
+        interaction: discord.Interaction,
+        private: bool = False
+        ):
     async def generate_callback(
             party_level: int = 1,
             chara: int = 5,
@@ -1453,6 +1456,9 @@ async def random_generator_ui(interaction: discord.Interaction):
             f"\n**Total XP**: {total_xp}\n"
             f"**Budget**: {max_budget[difficulty]}\n"
         )
+        if private:
+            await interaction.user.send(embed=embed)
+            return
         await channel.send(embed=embed)
 
     view = generator.SelectionView(interaction.user, generate_callback)
