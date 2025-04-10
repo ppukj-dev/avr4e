@@ -161,7 +161,11 @@ def process_message(message: str) -> str:
 @bot.event
 async def on_ready():
     # check_timestamps.start()
-    await bot.tree.sync()
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} commands")
+    except Exception as e:
+        print(e)
     print("We have logged in as {0.user}".format(bot))
 
 
