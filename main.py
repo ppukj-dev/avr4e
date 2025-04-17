@@ -220,6 +220,8 @@ async def add_sheet(ctx: commands.Context, url=""):
         embed = create_embed(data_dict)
 
         # clean empty cells
+        actions_data = actions_data.applymap(
+            lambda x: ''.join(x.split()) if isinstance(x, str) else x)
         actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0, )
         actions_data['Usages'] = actions_data['Usages'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None, )
@@ -263,6 +265,8 @@ async def update_sheet(ctx: commands.Context, url=""):
         embed = create_embed(data_dict)
 
         # clean empty cells
+        actions_data = actions_data.applymap(
+            lambda x: ''.join(x.split()) if isinstance(x, str) else x)
         actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0)
         actions_data['Usages'] = actions_data['Usages'].replace('', 0)
         actions_data = actions_data.replace('#REF!', None)
@@ -365,6 +369,7 @@ async def action(ctx: commands.Context, *, args=None):
             return
         await ctx.send(embed=embed)
     except Exception as e:
+        print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again. " + str(e))
 
 
@@ -400,7 +405,6 @@ async def token(ctx: commands.Context, *, args=None):
 
 
 def create_action_list_embed(name: str, df: pd.DataFrame):
-    error = ""
     max_length_description = 2500
     field_dict = {}
     embeds = []
@@ -445,7 +449,7 @@ def create_action_list_embed(name: str, df: pd.DataFrame):
         embed.set_footer(text=f"Page {i}")
     embeds.append(embed)
 
-    return embeds, error
+    return embeds
 
 
 async def handle_action(
