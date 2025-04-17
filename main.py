@@ -220,6 +220,8 @@ async def add_sheet(ctx: commands.Context, url=""):
         embed = create_embed(data_dict)
 
         # clean empty cells
+        actions_data = actions_data.applymap(
+            lambda x: x.strip() if isinstance(x, str) else x)
         actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0, )
         actions_data['Usages'] = actions_data['Usages'].replace('', 0, )
         actions_data = actions_data.replace('#REF!', None, )
@@ -263,6 +265,8 @@ async def update_sheet(ctx: commands.Context, url=""):
         embed = create_embed(data_dict)
 
         # clean empty cells
+        actions_data = actions_data.applymap(
+            lambda x: x.strip() if isinstance(x, str) else x)
         actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0)
         actions_data['Usages'] = actions_data['Usages'].replace('', 0)
         actions_data = actions_data.replace('#REF!', None)
