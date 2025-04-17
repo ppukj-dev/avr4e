@@ -365,8 +365,7 @@ async def action(ctx: commands.Context, *, args=None):
             return
         await ctx.send(embed=embed)
     except Exception as e:
-        print(e, traceback.format_exc())
-        await ctx.send("Error. Please check input again.")
+        await ctx.send("Error. Please check input again. " + str(e))
 
 
 @bot.command()
@@ -401,22 +400,27 @@ async def token(ctx: commands.Context, *, args=None):
 
 
 def create_action_list_embed(name: str, df: pd.DataFrame):
+    error = ""
     max_length_description = 2500
     field_dict = {}
     embeds = []
     description = ""
     # embed.title = f"{name}'s Actions"
-    for type1 in df['Type1'].unique().tolist():
-        field_dict[type1] = ""
-        for _, row in df[df['Type1'] == type1].iterrows():
-            usages = ""
-            if row['MaxUsages'] > 0:
-                usages = f" ({row['Usages']}/{row['MaxUsages']})"
-            type2 = ""
-            if row['Type2']:
-                type2 = f" ({row['Type2']})"
-            field_dict[type1] += f"- **{row['Name']}**{type2}."
-            field_dict[type1] += f" {row['ShortDesc']}{usages}\n"
+    try:
+        for type1 in df['Type1'].unique().tolist():
+            field_dict[type1] = ""
+            for _, row in df[df['Type1'] == type1].iterrows():
+                action_name = row['Name']
+                usages = ""
+                if row['MaxUsages'] > 0:
+                    usages = f" ({row['Usages']}/{row['MaxUsages']})"
+                type2 = ""
+                if row['Type2']:
+                    type2 = f" ({row['Type2']})"
+                field_dict[type1] += f"- **{row['Name']}**{type2}."
+                field_dict[type1] += f" {row['ShortDesc']}{usages}\n"
+    except Exception:
+        raise ValueError(f"Error Here: {action_name}")
 
     for key, value in field_dict.items():
         if key != "":
@@ -441,7 +445,7 @@ def create_action_list_embed(name: str, df: pd.DataFrame):
         embed.set_footer(text=f"Page {i}")
     embeds.append(embed)
 
-    return embeds
+    return embeds, error
 
 
 async def handle_action(
