@@ -1386,7 +1386,7 @@ async def generate_random_encounter(
 
     view = generator.SelectionView(ctx.author, generate_callback)
     await ctx.send(
-        content=f"@{ctx.author.id} Select an option below to continue:",
+        content=f"<@{ctx.author.id}> Select an option below to continue:",
         view=view
     )
     return

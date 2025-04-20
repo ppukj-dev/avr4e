@@ -109,7 +109,7 @@ class SelectionView(discord.ui.View):
             )
 
         await interaction.response.edit_message(
-            content="Success. You can now delete this message.",
+            content="Success. Deleting...",
             view=None,
             delete_after=2,
         )
