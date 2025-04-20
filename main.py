@@ -1257,63 +1257,138 @@ async def budget_calc(ctx: commands.Context, party_level: int, chara: int):
     await ctx.send(embed=embed)
 
 
-@bot.command(aliases=["generate", "gen_enc"])
+@bot.command(aliases=["generate", "gen"])
 async def generate_random_encounter(
         ctx: commands.Context,
-        party_level: int = 1,
-        chara: int = 5,
-        difficulty: str = "normal"):
-    if (
-            difficulty not in ["easy", "normal", "hard"] and
-            not difficulty.isnumeric()):
-        await ctx.send("Difficulty must be easy/normal/hard/number.")
-        return
-    if difficulty == "easy":
-        floor, ceil = party_level-2, party_level-1
-        min_xp, max_xp = get_budget(floor, chara), get_budget(ceil, chara)
-    elif difficulty == "normal":
-        floor, ceil = party_level, party_level+1
-        min_xp, max_xp = get_budget(floor, chara), get_budget(ceil, chara)
-    elif difficulty == "hard":
-        floor, ceil = party_level+2, party_level+4
-        min_xp, max_xp = get_budget(floor, chara), get_budget(ceil, chara)
-    else:
-        floor, ceil = party_level, party_level
-        min_xp, max_xp = 0.9 * int(difficulty), int(difficulty)
-    floor = max(floor-3, 1)
-    ceil = min(ceil+3, 32)
-    levels = list(range(floor, ceil+1))
-    monsterRepo = MonsterListRepository()
-    monster_list = monsterRepo.get_monsters_by_levels(levels)
-    if monster_list is None:
-        await ctx.send("No monsters found.")
-        return None
-    encounter, total_xp = generate_encounter(min_xp, max_xp, monster_list)
-    embed = discord.Embed()
-    embed.title = "Encounter Generation"
-    embed.description = (
-        f"**Party Level**: {party_level}\n"
-        f"**Character Count**: {chara}\n"
-        "\n"
-    )
-    for monster_id, (monster_data, count) in encounter.items():
-        monster_name = monster_data[1]
-        monster_level = monster_data[2]
-        monster_xp = monster_data[-1]
-        monster_group = monster_data[4]
-        monster_role = monster_data[3]
-        url = f"https://iws.mx/dnd/?view={monster_data[0]}"
-        embed.description += (
-            f"**{count}x "
-            f"[{monster_name}]({url})**:  "
-            f"L{monster_level} {monster_group} "
-            f"{monster_role} ({monster_xp} XP)\n"
+        private: str = "false",):
+    is_private = private == "true"
+
+    async def generate_callback(
+            party_level: int = 1,
+            chara: int = 5,
+            difficulty: str = "normal",
+            role: list = None,
+            interaction: discord.Interaction = None):
+        channel = interaction.channel
+        user = interaction.user
+        keywords = []
+        max_budget = {}
+        min_budget = {}
+        floor = {}
+        ceil = {}
+        floor["easy"] = party_level - 2
+        ceil["easy"] = party_level - 1
+        min_budget["easy"] = get_budget(floor["easy"], chara)
+        max_budget["easy"] = get_budget(ceil["easy"], chara)
+        floor["normal"] = party_level
+        ceil["normal"] = party_level + 1
+        min_budget["normal"] = get_budget(floor["normal"], chara)
+        max_budget["normal"] = get_budget(ceil["normal"], chara)
+        floor["hard"] = party_level + 2
+        ceil["hard"] = party_level + 4
+        min_budget["hard"] = get_budget(floor["hard"], chara)
+        max_budget["hard"] = get_budget(ceil["hard"], chara)
+        floor["custom"] = party_level
+        ceil["custom"] = party_level
+        if difficulty == "custom":
+            budget_embed = discord.Embed()
+            budget_embed.title = "XP Budget for Reference"
+            budget_embed.description = (
+                f"**Easy**: {max_budget['easy']}\n"
+                f"**Normal**: {max_budget['normal']}\n"
+                f"**Hard**: {max_budget['hard']}\n"
+            )
+            message = await channel.send(
+                content=(
+                    f"Please input XP budget value. <@{user.id}>\n"
+                    f"If you have any keyword you want to use, please "
+                    f"add it together after a space.\nYou can add few, "
+                    f"separated by space.\n"
+                    f"e.g. `10000 prone slide`"
+                ),
+                embed=budget_embed
+            )
+            try:
+                reply = await bot.wait_for(
+                    "message",
+                    timeout=60.0,
+                    check=lambda m: m.author == interaction.user
+                )
+                custom_budget = reply.content.split()[0]
+                if len(reply.content.split()) > 1:
+                    keywords = reply.content.split()[1:]
+                if custom_budget.isnumeric():
+                    max_budget["custom"] = int(custom_budget)
+                    min_budget["custom"] = 0.9 * int(custom_budget)
+                else:
+                    await channel.send("Invalid input.")
+                    await reply.delete()
+                    await message.delete()
+                    return
+                try:
+                    await reply.delete()
+                    await message.delete()
+                except Exception as e:
+                    print(e, traceback.format_exc())
+            except asyncio.TimeoutError:
+                await message.delete()
+                await channel.send("Time Out")
+                return
+        floor[difficulty] = max(floor[difficulty]-3, 1)
+        ceil[difficulty] = min(ceil[difficulty]+3, 32)
+        levels = list(range(floor[difficulty], ceil[difficulty]+1))
+        monsterRepo = MonsterListRepository()
+        monster_list = monsterRepo.get_monsters_by_levels_and_roles(
+            levels=levels,
+            roles=role
         )
-    embed.description += (
-        f"\n**Total XP**: {total_xp}\n"
-        f"**Budget**: {difficulty.title()}\n"
+        if monster_list is None:
+            await channel.send("No monsters found.")
+            return None
+        encounter, total_xp = generate_encounter(
+            min_xp=min_budget[difficulty],
+            max_xp=max_budget[difficulty],
+            monster_list=monster_list,
+            keywords=keywords
+            )
+        embed = discord.Embed()
+        embed.set_author(
+            name=interaction.user.display_name,
+            icon_url=interaction.user.display_avatar.url
+        )
+        embed.title = "Encounter Generation"
+        embed.description = (
+            f"**Party Level**: {party_level}\n"
+            f"**Character Count**: {chara}\n"
+            "\n"
+        )
+        for monster_id, (monster_data, count) in encounter.items():
+            monster_name = monster_data[1]
+            monster_level = monster_data[2]
+            monster_xp = monster_data[-1]
+            monster_group = monster_data[4]
+            monster_role = monster_data[3]
+            url = f"https://iws.mx/dnd/?view={monster_data[0]}"
+            embed.description += (
+                f"**{count}x "
+                f"[{monster_name}]({url})**:  "
+                f"L{monster_level} {monster_group} "
+                f"{monster_role} ({monster_xp} XP)\n"
+            )
+        embed.description += (
+            f"\n**Total XP**: {total_xp}\n"
+            f"**Budget**: {max_budget[difficulty]}\n"
+        )
+        if is_private:
+            await interaction.user.send(embed=embed)
+            return
+        await channel.send(embed=embed)
+
+    view = generator.SelectionView(ctx.author, generate_callback)
+    await ctx.send(
+        content=f"@{ctx.author.id} Select an option below to continue:",
+        view=view
     )
-    await ctx.send(embed=embed)
     return
 
 

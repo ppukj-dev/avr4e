@@ -103,14 +103,15 @@ class SelectionView(discord.ui.View):
             self.monster_role is None
         ):
             return await interaction.response.edit_message(
-                content="No values selected! Closing...",
+                content="No values selected! Deleting...",
                 view=None,
+                delete_after=2,
             )
 
         await interaction.response.edit_message(
-            content="Success. You can now close this message.",
+            content="Success. You can now delete this message.",
             view=None,
-            delete_after=1,
+            delete_after=2,
         )
 
         await self.generate_callback(
