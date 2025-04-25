@@ -1086,7 +1086,7 @@ async def gacha(ctx: commands.Context):
         result = get_random_from_sheet(sheet_dict)
         embed = discord.Embed()
         embed.title = "Gacha Result"
-        embed.description = f"**{sheet.title()}**: {result}"
+        embed.description = f"{result}"
         embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)
         await ctx.send(embed=embed)
         create_gacha_log_df(
