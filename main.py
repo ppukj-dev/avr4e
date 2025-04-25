@@ -1084,9 +1084,12 @@ async def gacha(ctx: commands.Context):
             return
         sheet_dict = df_dict[sheet]
         result = get_random_from_sheet(sheet_dict)
+        sheet_df = pd.DataFrame(start)
+        image = sheet_df.loc[sheet_df['sheet'] == sheet, 'image'].values[0]
         embed = discord.Embed()
         embed.title = "Gacha Result"
         embed.description = f"{result}"
+        embed.set_image(url=image)
         embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)
         await ctx.send(embed=embed)
         create_gacha_log_df(
