@@ -1085,21 +1085,29 @@ async def gacha(ctx: commands.Context):
         sheet_dict = df_dict[sheet]
         result = get_random_from_sheet(sheet_dict)
         sheet_df = pd.DataFrame(start)
-        image = sheet_df.loc[sheet_df['sheet'] == sheet, 'image'].values[0]
+        image = None
+        try:
+            image = sheet_df.loc[sheet_df['sheet'] == sheet, 'image'].values[0]
+        except Exception as e:
+            print(e)
         embed = discord.Embed()
         embed.title = "Gacha Result"
         embed.description = f"{result}"
         embed.set_image(url=image)
         embed.set_author(name=ctx.author.name, icon_url=ctx.author.avatar.url)
         await ctx.send(embed=embed)
-        create_gacha_log_df(
-            spreadsheet_id,
-            ctx.channel.id,
-            ctx.channel.name,
-            ctx.author.id,
-            ctx.author.name,
-            result
-        )
+        try:
+            create_gacha_log_df(
+                spreadsheet_id,
+                ctx.channel.id,
+                ctx.channel.name,
+                ctx.author.id,
+                ctx.author.name,
+                result
+            )
+        except Exception as e:
+            print(e)
+            return
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
