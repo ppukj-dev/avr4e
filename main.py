@@ -160,7 +160,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
-    # check_timestamps.start()
+    check_timestamps.start()
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands")
@@ -1022,35 +1022,58 @@ def add_border_template(url: str, template_path: str, name=""):
 
 utc = datetime.timezone.utc
 times = [
-    datetime.time(hour=0, tzinfo=utc),
     datetime.time(hour=12, tzinfo=utc)
 ]
 
 
 @tasks.loop(time=times)
 async def check_timestamps():
-    channel_calendar = bot.get_channel(1265647805867888741)
-    start_date = datetime.datetime(2024, 8, 17, 0, 0, 0, tzinfo=utc)
+    channel_calendar = bot.get_channel(1343085306999734370)
+    start_date = datetime.datetime(2025, 4, 25, 12, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     delta = now - start_date
-    total_sessions = int(delta.total_seconds() // (60 * 60 * 12))
-    start_month = 2
-    month_number = int((start_month + (total_sessions // 7)) % 12)
-    chapter_number = total_sessions // 14 + 1
-    month = f"月 {month_number+1:02}"
-    session_number = f"{total_sessions+1:02}"
-    month_season_dict = {
-        3: "🌸", 4: "🌸", 5: "🌸",
-        6: "🌞", 7: "🌞", 8: "🌞",
-        9: "🍁", 10: "🍁", 11: "🍁",
-        12: "❄️", 1: "❄️", 2: "❄️"
-    }
-    season = month_season_dict[month_number+1]
-    channel_name = f"📅 {month} {season} - {chapter_number}.{session_number}"
+    total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
+    date = get_in_game_date(total_sessions+1)
+    chapter_number = total_sessions // 7 + 1
+    session_number = f"{total_sessions:02}"
+    channel_name = f"📅 {chapter_number}.{session_number} - {date}"
+    print(channel_name)
     try:
         await channel_calendar.edit(name=channel_name)
     except Exception as e:
         print(e, traceback.format_exc())
+
+
+def get_in_game_date(week_number):
+    months = [
+        "Primaris", "Sequora", "Trionyx", "Quadrael",
+        "Pentara", "Hexune", "Sephyros", "Octyra"
+    ]
+
+    month_weeks = []
+    for i in range(8):
+        if (i + 1) % 2 == 1:
+            month_weeks.append(3)
+        else:
+            month_weeks.append(4)
+
+    total_weeks_in_year = sum(month_weeks)
+    week_in_year = (week_number - 1) % total_weeks_in_year + 1
+
+    current_week = week_in_year
+    for month_index, weeks_in_month in enumerate(month_weeks):
+        if current_week <= weeks_in_month:
+            week_label = {
+                1: "1st Week",
+                2: "2nd Week",
+                3: "3rd Week",
+                4: "4th Week"
+            }[current_week]
+            return f"{months[month_index]} {week_label}"
+        else:
+            current_week -= weeks_in_month
+
+    raise ValueError("Invalid week number computation.")
 
 
 def two_digit(number: int):
