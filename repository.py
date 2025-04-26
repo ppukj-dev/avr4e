@@ -187,6 +187,84 @@ class GachaMapRepository(Repository):
             db.connection.commit()
 
 
+class DowntimeMapRepository(Repository):
+    def __init__(self):
+        super().__init__()
+        self.connection = sqlite3.connect("database/avr4e.db")
+        self.cursor = self.connection.cursor()
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS downtime_map (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            guild_id VARCHAR(255) NOT NULL,
+            start TEXT NOT NULL,
+            items TEXT NOT NULL,
+            sheet_url TEXT NOT NULL,
+            UNIQUE (guild_id)
+        )""")
+        self.cursor.close()
+        self.connection.close()
+
+    def get_gacha(self, guild_id: str) -> tuple:
+        query = """
+        SELECT
+            id,
+            guild_id,
+            start,
+            items,
+            sheet_url
+        FROM downtime_map
+        WHERE guild_id = ?
+        LIMIT 1
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id,))
+            result = db.cursor.fetchone()
+
+        return result
+
+    def set_gacha(
+            self,
+            guild_id: str,
+            start: str,
+            items: str,
+            sheet_url: str
+            ) -> None:
+        query = """
+        INSERT INTO downtime_map (
+            guild_id, start, items, sheet_url
+        )
+        VALUES (
+            ?, ?, ?, ?
+        )
+        ON CONFLICT (guild_id)
+            DO UPDATE SET
+                start = ?,
+                items = ?,
+                sheet_url = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (
+                guild_id,
+                start, items, sheet_url,
+                start, items, sheet_url))
+            db.connection.commit()
+
+    def update_character(self, id: int, start: str, items: str) -> None:
+        query = """
+        UPDATE downtime_map
+        SET
+            start = COALESCE(?, start),
+            items = COALESCE(?, items)
+        WHERE id = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (start, items, id))
+            db.connection.commit()
+
+
 class MySQLRepository:
     def __init__(self):
         self.host = MYSQL_HOST

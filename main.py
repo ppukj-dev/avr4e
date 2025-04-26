@@ -16,6 +16,7 @@ from discord.ext import commands, tasks
 from view import generator
 import datetime
 from repository import CharacterUserMapRepository, GachaMapRepository
+from repository import DowntimeMapRepository
 from repository import MonsterListRepository
 import constant
 from pagination import Paginator
@@ -1150,8 +1151,8 @@ def get_sheet_to_roll(start: dict) -> str:
     return ""
 
 
-def get_random_from_sheet(sheet_dict: dict) -> str:
-    random_value = random.choice(list(sheet_dict["value"].values()))
+def get_random_from_sheet(sheet_dict: dict, column_name: str = "value") -> str:
+    random_value = random.choice(list(sheet_dict[column_name].values()))
     return random_value
 
 
@@ -1204,6 +1205,135 @@ async def gacha_sheet(ctx: commands.Context, url: str = ""):
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
     return
+
+
+@bot.command(aliases=["ds"])
+async def downtime_sheet(ctx: commands.Context, url: str = ""):
+    try:
+        await ctx.message.delete()
+        if url == "":
+            await ctx.send("Please provide a url")
+            return
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        sheets = get_all_sheets(spreadsheet_id)
+        if len(sheets) == 0:
+            await ctx.send("No sheets found")
+            return
+        df_dict = {}
+        for sheet in sheets:
+            if sheet.title not in ['start', 'downtime']:
+                continue
+            temp_df = get_df(spreadsheet_id, sheet.title)
+            temp_df = temp_df.replace('#REF!', None, )
+            temp_df = temp_df.dropna()
+            if sheet.title == "start":
+                temp_df = temp_df.sort_values(by="maxDice", ascending=True)
+                start = temp_df.to_dict()
+                print(start)
+                continue
+            if sheet.title == "downtime":
+                temp_df = temp_df.applymap(
+                    lambda x: x.strip() if isinstance(x, str) else x)
+                temp_df['char'] = temp_df['char'].replace('', pd.NA)
+                temp_df = temp_df.dropna(subset=['char'])
+            df_dict[sheet.title] = temp_df.to_dict()
+        downtimeRepo = DowntimeMapRepository()
+        downtimeRepo.set_gacha(
+            guild_id=ctx.guild.id,
+            start=json.dumps(start),
+            items=json.dumps(df_dict),
+            sheet_url=url
+        )
+        embed = discord.Embed()
+        embed.title = "Downtime Gacha"
+        embed.description = ". . ."
+        await ctx.send(
+                content=f"New Gacha [Spreadsheet]({url}) is added.",
+                embed=embed
+            )
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+    return
+
+
+@bot.command(aliases=["dt"])
+async def downtime(ctx: commands.Context):
+    try:
+        await ctx.message.delete()
+        downtimeRepo = DowntimeMapRepository()
+        data = downtimeRepo.get_gacha(ctx.guild.id)
+        if data is None:
+            await ctx.send("No downtime sheet is found.")
+            return
+        start = json.loads(data[2])
+        df_dict = json.loads(data[3])
+        url = data[4]
+        spreadsheet_id = get_spreadsheet_id(url)
+        sheet = get_sheet_to_roll(start)
+        if sheet == "":
+            await ctx.send("No sheet found.")
+            return
+        if sheet == "none":
+            await none_meet(ctx)
+            return
+        sheet_dict = df_dict[sheet]
+        sheet_df = pd.DataFrame(sheet_dict)
+        image = None
+        character = "no one"
+        location = "nowhere in particular"
+        event = "No event described."
+        try:
+            random_row = sheet_df.sample(n=1).iloc[0]
+            character = random_row['char']
+            if random_row['where']:
+                location = random_row['where']
+            if random_row['event']:
+                event = random_row['event']
+            if random_row['image/gif embed']:
+                image = random_row['image/gif embed']
+        except Exception as e:
+            print("error: ", e)
+        embed = discord.Embed()
+        embed.title = f"You meet with {character} at {location}!"
+        embed.description = f"{event}"
+        avatar_url = ""
+        if ctx.author.avatar:
+            avatar_url = ctx.author.avatar.url
+        embed.set_image(url=image)
+        embed.set_author(name=ctx.author.name, icon_url=avatar_url)
+        await ctx.send(embed=embed)
+        try:
+            create_gacha_log_df(
+                spreadsheet_id,
+                ctx.channel.id,
+                ctx.channel.name,
+                ctx.author.id,
+                ctx.author.name,
+                character
+            )
+        except Exception as e:
+            print(e)
+            return
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+
+async def none_meet(ctx: commands.Context):
+    embed = discord.Embed()
+    avatar_url = ""
+    if ctx.author.avatar:
+        avatar_url = ctx.author.avatar.url
+    embed.set_author(name=ctx.author.name, icon_url=avatar_url)
+    embed.title = "None"
+    embed.description = (
+        "You meet no one."
+    )
+    await ctx.send(embed=embed)
 
 
 def calculate_gacha_chance(data: dict):
