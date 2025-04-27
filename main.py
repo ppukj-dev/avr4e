@@ -1023,14 +1023,14 @@ def add_border_template(url: str, template_path: str, name=""):
 
 utc = datetime.timezone.utc
 times = [
-    datetime.time(hour=12, tzinfo=utc)
+    datetime.time(hour=1, tzinfo=utc)
 ]
 
 
 @tasks.loop(time=times)
 async def check_timestamps():
     channel_calendar = bot.get_channel(1343085306999734370)
-    start_date = datetime.datetime(2025, 4, 25, 12, 0, 0, tzinfo=utc)
+    start_date = datetime.datetime(2025, 4, 0, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     delta = now - start_date
     total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
