@@ -10,5 +10,5 @@ XP_LEVEL_LIST = [
 
 MONSTER_ROLE_LIST = [
     "Brute", "Artillery", "Skirmisher", "Controller",
-    "Lurker", "Leader"
+    "Lurker", "Leader", "Soldier"
 ]
