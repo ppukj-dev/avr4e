@@ -1357,7 +1357,10 @@ async def downtime(ctx: commands.Context):
             print("error: ", e)
         embed = discord.Embed()
         embed.title = f"You meet with {character} at {location}!"
-        embed.description = f"{event}"
+        embed.description = (
+            f"{event}\n\n"
+            f"-# [*Want to add events of your character? Click this.*]({url})"
+        )
         avatar_url = ""
         if ctx.author.avatar:
             avatar_url = ctx.author.avatar.url
