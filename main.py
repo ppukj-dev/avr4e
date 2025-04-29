@@ -161,7 +161,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
-    check_timestamps.start()
+    daily_task_run.start()
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands")
@@ -1027,8 +1027,7 @@ times = [
 ]
 
 
-@tasks.loop(time=times)
-async def check_timestamps():
+async def update_calendar():
     channel_calendar = bot.get_channel(1343085306999734370)
     start_date = datetime.datetime(2025, 4, 25, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
@@ -1043,6 +1042,65 @@ async def check_timestamps():
         await channel_calendar.edit(name=channel_name)
     except Exception as e:
         print(e, traceback.format_exc())
+
+
+async def update_ds(guild_id: int):
+    try:
+        downtimeRepo = DowntimeMapRepository()
+        data = downtimeRepo.get_gacha(guild_id=guild_id)
+        if data is None:
+            print("No downtime sheet found")
+            return
+        url = data[4]
+        if url == "":
+            print("No downtime sheet found")
+            return
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            print("No downtime sheet found")
+            return
+        sheets = get_all_sheets(spreadsheet_id)
+        if len(sheets) == 0:
+            print("No downtime sheet found")
+            return
+        df_dict = {}
+        for sheet in sheets:
+            if sheet.title not in ['start', 'downtime']:
+                continue
+            temp_df = get_df(spreadsheet_id, sheet.title)
+            temp_df = temp_df.replace('#REF!', None, )
+            temp_df = temp_df.dropna()
+            if sheet.title == "start":
+                temp_df = temp_df.sort_values(by="maxDice", ascending=True)
+                start = temp_df.to_dict()
+                print(start)
+                continue
+            if sheet.title == "downtime":
+                temp_df = temp_df.applymap(
+                    lambda x: x.strip() if isinstance(x, str) else x)
+                temp_df['char'] = temp_df['char'].replace('', pd.NA)
+                temp_df = temp_df.dropna(subset=['char'])
+            df_dict[sheet.title] = temp_df.to_dict()
+        downtimeRepo = DowntimeMapRepository()
+        downtimeRepo.set_gacha(
+            guild_id=guild_id,
+            start=json.dumps(start),
+            items=json.dumps(df_dict),
+            sheet_url=url
+        )
+        print("Downtime sheet is updated.")
+    except Exception as e:
+        print(e, traceback.format_exc())
+    return
+
+
+@tasks.loop(time=times)
+async def daily_task_run():
+    await update_calendar()
+    await update_ds(1343085306571915276)
+    bot_dump_channel = await bot.get_channel(1343085307628617900)
+    await bot_dump_channel.send(
+        "Done updating calendar and downtime.")
 
 
 def get_in_game_date(week_number):
