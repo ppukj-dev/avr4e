@@ -1098,7 +1098,7 @@ async def update_ds(guild_id: int):
 async def daily_task_run():
     await update_calendar()
     await update_ds(1343085306571915276)
-    bot_dump_channel = await bot.get_channel(1343085307628617900)
+    bot_dump_channel = bot.get_channel(1343085307628617900)
     await bot_dump_channel.send(
         "Done updating calendar and downtime.")
 
