@@ -244,6 +244,8 @@ async def add_sheet(ctx: commands.Context, url=""):
             sheet_url=url
             )
         await ctx.send(f"Sheet `{name}` is added.", embed=embed)
+    except PermissionError:
+        await ctx.send("Error. Please check your sheet permission.")
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
