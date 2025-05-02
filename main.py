@@ -1034,7 +1034,7 @@ async def update_calendar():
     delta = now - start_date
     total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
     date = get_in_game_date(total_sessions+1)
-    chapter_number = total_sessions // 7 + 1
+    chapter_number = (total_sessions - 1) // 7 + 1
     session_number = f"{total_sessions:02}"
     channel_name = f"📅 {chapter_number}.{session_number} - {date}"
     print(channel_name)
