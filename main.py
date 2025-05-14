@@ -1356,7 +1356,8 @@ async def downtime(ctx: commands.Context, *, args=None):
         sheet_df = pd.DataFrame(sheet_dict)
 
         # remove the userID of the person who called the command
-        sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
+        if 'userID' in sheet_df.columns:
+            sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
 
         if filter_by_user_id is not None:
             sheet_df = sheet_df[sheet_df['userID'].str.contains(
