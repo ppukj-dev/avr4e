@@ -1373,6 +1373,7 @@ async def downtime(ctx: commands.Context, *, args=None):
         character = "no one"
         location = "nowhere in particular"
         event = "No event described."
+        user_id = None
         if sheet_df.empty:
             await none_meet(ctx)
             return
@@ -1392,7 +1393,17 @@ async def downtime(ctx: commands.Context, *, args=None):
         embed = discord.Embed()
         embed.title = f"You meet with {character} at {location}!"
         if filter_by_user_id is not None:
-            event = f"What a coincidence! 😉\n\n{event}"
+            event = (
+                f"*Fancy seeing you here… or was "
+                f"this part of someone’s master plan?* 😏🕵️‍♀️\n\n{event}"
+            )
+        if filter_by_location is not None:
+            if random_row['where']:
+                filter_by_location = random_row['where']
+            event = (
+                f"*Going to {filter_by_location.title()}, eh? "
+                f"👀📍*\n\n{event}"
+            )
         embed.description = (
             f"{event}\n\n"
             f"-# [*Want to add events of your character? Click this.*]({url})"
