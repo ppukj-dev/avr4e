@@ -1321,7 +1321,7 @@ async def downtime_sheet(ctx: commands.Context, url: str = ""):
 
 
 @bot.command(aliases=["dt"])
-async def downtime(ctx: commands.Context):
+async def downtime(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
         downtimeRepo = DowntimeMapRepository()
@@ -1340,12 +1340,34 @@ async def downtime(ctx: commands.Context):
         if sheet == "none":
             await none_meet(ctx)
             return
+        filter_by_user_id = None
+        filter_by_location = None
+        if args is not None:
+            if re.search(r'<@\d+>', args):
+                filter_by_user_id = args
+            else:
+                filter_by_location = args
         sheet_dict = df_dict[sheet]
         sheet_df = pd.DataFrame(sheet_dict)
+
+        # remove the userID of the person who called the command
+        sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
+
+        if filter_by_user_id is not None:
+            sheet_df = sheet_df[sheet_df['userID'].str.contains(
+                filter_by_user_id, case=False
+            )]
+        if filter_by_location is not None:
+            sheet_df = sheet_df[sheet_df['where'].str.contains(
+                filter_by_location, case=False
+            )]
         image = None
         character = "no one"
         location = "nowhere in particular"
         event = "No event described."
+        if sheet_df.empty:
+            await none_meet(ctx)
+            return
         try:
             random_row = sheet_df.sample(n=1).iloc[0]
             character = random_row['char']
@@ -1355,6 +1377,8 @@ async def downtime(ctx: commands.Context):
                 event = random_row['event']
             if random_row['image/gif embed']:
                 image = random_row['image/gif embed']
+            if random_row['userID']:
+                user_id = random_row['userID']
         except Exception as e:
             print("error: ", e)
         embed = discord.Embed()
@@ -1368,7 +1392,7 @@ async def downtime(ctx: commands.Context):
             avatar_url = ctx.author.avatar.url
         embed.set_image(url=image)
         embed.set_author(name=ctx.author.name, icon_url=avatar_url)
-        await ctx.send(embed=embed)
+        await ctx.send(content=user_id, embed=embed)
         try:
             create_gacha_log_df(
                 spreadsheet_id,
@@ -1392,9 +1416,9 @@ async def none_meet(ctx: commands.Context):
     if ctx.author.avatar:
         avatar_url = ctx.author.avatar.url
     embed.set_author(name=ctx.author.name, icon_url=avatar_url)
-    embed.title = "None"
+    embed.title = "You meet no one."
     embed.description = (
-        "You meet no one."
+        "Better luck next time.\n\nMaybe, try another place or people?"
     )
     await ctx.send(embed=embed)
 
