@@ -1029,8 +1029,7 @@ times = [
 ]
 
 
-async def update_calendar():
-    channel_calendar = bot.get_channel(1343085306999734370)
+def get_calendar_name() -> str:
     start_date = datetime.datetime(2025, 4, 25, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     delta = now - start_date
@@ -1038,7 +1037,13 @@ async def update_calendar():
     date = get_in_game_date(total_sessions+1)
     chapter_number = (total_sessions - 1) // 7 + 1
     session_number = f"{total_sessions:02}"
-    channel_name = f"📅 {chapter_number}.{session_number} - {date}"
+    calendar_name = f"{chapter_number}.{session_number} - {date}"
+    return calendar_name
+
+
+async def update_calendar():
+    channel_calendar = bot.get_channel(1343085306999734370)
+    channel_name = f"📅 {get_calendar_name()}"
     print(channel_name)
     try:
         await channel_calendar.edit(name=channel_name)
@@ -1358,9 +1363,12 @@ async def downtime(ctx: commands.Context, *, args=None):
                 filter_by_user_id, case=False
             )]
         if filter_by_location is not None:
-            sheet_df = sheet_df[sheet_df['where'].str.contains(
-                filter_by_location, case=False
-            )]
+            sheet_df = sheet_df[
+                sheet_df['where'].isna() |
+                (sheet_df['where'] == '') |
+                sheet_df['where'].str.contains(
+                    filter_by_location, case=False, na=False)
+            ]
         image = None
         character = "no one"
         location = "nowhere in particular"
@@ -1383,6 +1391,8 @@ async def downtime(ctx: commands.Context, *, args=None):
             print("error: ", e)
         embed = discord.Embed()
         embed.title = f"You meet with {character} at {location}!"
+        if filter_by_user_id is not None:
+            event = f"What a coincidence! 😉\n\n{event}"
         embed.description = (
             f"{event}\n\n"
             f"-# [*Want to add events of your character? Click this.*]({url})"
@@ -1392,6 +1402,9 @@ async def downtime(ctx: commands.Context, *, args=None):
             avatar_url = ctx.author.avatar.url
         embed.set_image(url=image)
         embed.set_author(name=ctx.author.name, icon_url=avatar_url)
+        embed.set_footer(
+            text=f"DT{get_calendar_name()}"
+        )
         await ctx.send(content=user_id, embed=embed)
         try:
             create_gacha_log_df(
