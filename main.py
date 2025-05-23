@@ -35,6 +35,11 @@ bot = commands.Bot(
     intents=discord.Intents.all(),
     help_command=None
 )
+charaRepo = None
+gachaRepo = None
+downtimeRepo = None
+monsterRepo = None
+
 
 app = FastAPI()
 origins = [
@@ -234,7 +239,6 @@ async def add_sheet(ctx: commands.Context, url=""):
         df_data = df_data.dropna()
 
         name = df_data[df_data['field_name'] == 'Name']['value'].iloc[0]
-        charaRepo = CharacterUserMapRepository()
         charaRepo.set_character(
             ctx.guild.id,
             ctx.author.id,
@@ -254,7 +258,6 @@ async def add_sheet(ctx: commands.Context, url=""):
 @bot.command(aliases=["update"])
 async def update_sheet(ctx: commands.Context, url=""):
     try:
-        charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
         old_actions_data = pd.read_json(io.StringIO(character[3]))
         url = character[4]
@@ -309,7 +312,6 @@ async def update_sheet(ctx: commands.Context, url=""):
 
 @bot.command(aliases=["sheet"])
 async def char(ctx: commands.Context):
-    charaRepo = CharacterUserMapRepository()
     character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
     df_data = pd.read_json(io.StringIO(character[2]))
     data_dict = create_data_dict(df_data)
@@ -322,7 +324,6 @@ async def char(ctx: commands.Context):
 async def reset(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
-        charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
         actions = pd.read_json(io.StringIO(character[3]))
         if args is None:
@@ -352,7 +353,6 @@ async def reset(ctx: commands.Context, *, args=None):
 async def action(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
-        charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
         sheet_id = character[0]
         name = character[1]
@@ -381,7 +381,6 @@ async def token(ctx: commands.Context, *, args=None):
     try:
         if args is None:
             await ctx.message.delete()
-            charaRepo = CharacterUserMapRepository()
             character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
             data = pd.read_json(io.StringIO(character[2]))
             embed = discord.Embed()
@@ -392,7 +391,6 @@ async def token(ctx: commands.Context, *, args=None):
             await ctx.send(embed=embed)
         if args == "shinreigumi":
             await ctx.message.delete()
-            charaRepo = CharacterUserMapRepository()
             character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
             data = pd.read_json(io.StringIO(character[2]))
             name = data[data['field_name'] == 'Name']['value'].iloc[0]
@@ -495,7 +493,6 @@ async def handle_action(
         usages_value += increment
         embed.add_field(name=action_name, value=usages_value, inline=False)
         df.loc[df['Name'] == action_name, 'Usages'] = new_usages
-        charaRepo = CharacterUserMapRepository()
         charaRepo.update_character(sheet_id, None, df.to_json())
     return embed
 
@@ -780,7 +777,6 @@ async def check(ctx: commands.Context, *, args=None):
         if args is None:
             await ctx.send("Please specify check to roll.")
             return
-        charaRepo = CharacterUserMapRepository()
         character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
         # sheet_id = character[0]
         name = character[1]
@@ -1053,7 +1049,6 @@ async def update_calendar():
 
 async def update_ds(guild_id: int):
     try:
-        downtimeRepo = DowntimeMapRepository()
         data = downtimeRepo.get_gacha(guild_id=guild_id)
         if data is None:
             print("No downtime sheet found")
@@ -1088,7 +1083,6 @@ async def update_ds(guild_id: int):
                 temp_df['char'] = temp_df['char'].replace('', pd.NA)
                 temp_df = temp_df.dropna(subset=['char'])
             df_dict[sheet.title] = temp_df.to_dict()
-        downtimeRepo = DowntimeMapRepository()
         downtimeRepo.set_gacha(
             guild_id=guild_id,
             start=json.dumps(start),
@@ -1158,7 +1152,6 @@ def main():
 async def gacha(ctx: commands.Context):
     try:
         await ctx.message.delete()
-        gachaRepo = GachaMapRepository()
         data = gachaRepo.get_gacha(ctx.guild.id)
         if data is None:
             await ctx.send("No gacha sheet is found.")
@@ -1249,7 +1242,6 @@ async def gacha_sheet(ctx: commands.Context, url: str = ""):
                 print(start)
                 continue
             df_dict[sheet.title] = temp_df.to_dict()
-        gachaRepo = GachaMapRepository()
         gachaRepo.set_gacha(
             guild_id=ctx.guild.id,
             start=json.dumps(start),
@@ -1305,7 +1297,6 @@ async def downtime_sheet(ctx: commands.Context, url: str = ""):
                 temp_df['char'] = temp_df['char'].replace('', pd.NA)
                 temp_df = temp_df.dropna(subset=['char'])
             df_dict[sheet.title] = temp_df.to_dict()
-        downtimeRepo = DowntimeMapRepository()
         downtimeRepo.set_gacha(
             guild_id=ctx.guild.id,
             start=json.dumps(start),
@@ -1329,7 +1320,6 @@ async def downtime_sheet(ctx: commands.Context, url: str = ""):
 async def downtime(ctx: commands.Context, *, args=None):
     try:
         await ctx.message.delete()
-        downtimeRepo = DowntimeMapRepository()
         data = downtimeRepo.get_gacha(ctx.guild.id)
         if data is None:
             await ctx.send("No downtime sheet is found.")
@@ -1627,7 +1617,6 @@ async def generate_random_encounter(
         floor[difficulty] = max(floor[difficulty]-3, 1)
         ceil[difficulty] = min(ceil[difficulty]+3, 32)
         levels = list(range(floor[difficulty], ceil[difficulty]+1))
-        monsterRepo = MonsterListRepository()
         monster_list = monsterRepo.get_monsters_by_levels_and_roles(
             levels=levels,
             roles=role
@@ -1813,7 +1802,6 @@ async def random_generator_ui(
         floor[difficulty] = max(floor[difficulty]-3, 1)
         ceil[difficulty] = min(ceil[difficulty]+3, 32)
         levels = list(range(floor[difficulty], ceil[difficulty]+1))
-        monsterRepo = MonsterListRepository()
         monster_list = monsterRepo.get_monsters_by_levels_and_roles(
             levels=levels,
             roles=role
@@ -1869,4 +1857,8 @@ async def random_generator_ui(
 
 
 if __name__ == "__main__":
+    charaRepo = CharacterUserMapRepository()
+    gachaRepo = GachaMapRepository()
+    downtimeRepo = DowntimeMapRepository()
+    monsterRepo = MonsterListRepository()
     main()
