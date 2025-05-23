@@ -1345,8 +1345,8 @@ async def downtime(ctx: commands.Context, *, args=None):
         if sheet == "none":
             await none_meet(ctx)
             return
-        filter_by_user_id = None
-        filter_by_location = None
+        filter_by_user_id: str = None
+        filter_by_location: str = None
         if args is not None:
             if re.search(r'<@\d+>', args):
                 filter_by_user_id = args
@@ -1370,6 +1370,10 @@ async def downtime(ctx: commands.Context, *, args=None):
                 sheet_df['where'].str.contains(
                     filter_by_location, case=False, na=False)
             ]
+            unique_location = sheet_df['where'].unique().tolist()
+            if len(unique_location) == 1 and unique_location[0] == "":
+                await none_meet(ctx, filter_by_location)
+                return
         image = None
         character = "no one"
         location = "nowhere in particular"
@@ -1383,6 +1387,8 @@ async def downtime(ctx: commands.Context, *, args=None):
             character = random_row['char']
             if random_row['where']:
                 location = random_row['where']
+            else:
+                location = unique_location[0]
             if random_row['event']:
                 event = random_row['event']
             if random_row['image/gif embed']:
@@ -1399,10 +1405,8 @@ async def downtime(ctx: commands.Context, *, args=None):
                 f"this part of someone’s master plan?* 😏🕵️‍♀️\n\n{event}"
             )
         if filter_by_location is not None:
-            if random_row['where']:
-                filter_by_location = random_row['where']
             event = (
-                f"*Going to {filter_by_location.title()}, eh? "
+                f"*Going to {location}, eh? "
                 f"👀📍*\n\n{event}"
             )
         embed.description = (
@@ -1435,16 +1439,23 @@ async def downtime(ctx: commands.Context, *, args=None):
         await ctx.send("Error. Please check input again.")
 
 
-async def none_meet(ctx: commands.Context):
+async def none_meet(ctx: commands.Context, location: str = ""):
     embed = discord.Embed()
     avatar_url = ""
     if ctx.author.avatar:
         avatar_url = ctx.author.avatar.url
     embed.set_author(name=ctx.author.name, icon_url=avatar_url)
     embed.title = "You meet no one."
-    embed.description = (
-        "Better luck next time.\n\nMaybe, try another place or people?"
-    )
+    if location:
+        embed.description = (
+            f"*You are looking for someone at {location}…* "
+            f"but no one is there.\n\n"
+            f"*Maybe, try another place or people?*"
+        )
+    else:
+        embed.description = (
+            "Better luck next time.\n\nMaybe, try another place or people?"
+        )
     await ctx.send(embed=embed)
 
 
