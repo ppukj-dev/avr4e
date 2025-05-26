@@ -1361,9 +1361,10 @@ async def downtime(ctx: commands.Context, *, args=None):
                     filter_by_location, case=False, na=False)
             ]
             unique_location = sheet_df['where'].unique().tolist()
-            if len(unique_location) == 1 and unique_location[0] == "":
+            if len(unique_location) <= 1 and unique_location[0] == "":
                 await none_meet(ctx, filter_by_location)
                 return
+            filter_by_location = unique_location[0]
         image = None
         character = "no one"
         location = "nowhere in particular"
@@ -1378,7 +1379,7 @@ async def downtime(ctx: commands.Context, *, args=None):
             if random_row['where']:
                 location = random_row['where']
             else:
-                location = unique_location[0]
+                location = filter_by_location
             if random_row['event']:
                 event = random_row['event']
             if random_row['image/gif embed']:
