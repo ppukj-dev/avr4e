@@ -18,6 +18,7 @@ import datetime
 from repository import CharacterUserMapRepository, GachaMapRepository
 from repository import DowntimeMapRepository
 from repository import MonsterListRepository
+from repository import MonstersUserMapRepository
 import constant
 from pagination import Paginator
 from pydantic import BaseModel
@@ -1857,9 +1858,291 @@ async def random_generator_ui(
     )
 
 
+@bot.command(aliases=["madd"])
+async def add_monster_sheet(ctx: commands.Context, url=""):
+    try:
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        df_data = get_df(spreadsheet_id, "data")
+        actions_data = get_df(spreadsheet_id, "actions")
+
+        # clean empty cells
+        actions_data = actions_data.applymap(
+            lambda x: x.strip() if isinstance(x, str) else x)
+        actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0, )
+        actions_data['Usages'] = actions_data['Usages'].replace('', 0, )
+        actions_data = actions_data.replace('#REF!', None, )
+        actions_data = actions_data[
+            actions_data['Name'].str.strip().astype(bool)
+        ]
+        actions_data = actions_data.dropna()
+        df_data = df_data.replace('#REF!', None)
+        df_data = df_data.dropna()
+
+        name = "Monsters"
+        monsterMapRepo.set_character(
+            ctx.guild.id,
+            ctx.author.id,
+            name,
+            df_data.to_json(),
+            actions_data.to_json(),
+            sheet_url=url
+            )
+        await ctx.send(f"Sheet `{name}` is added.")
+    except PermissionError:
+        await ctx.send("Error. Please check your sheet permission.")
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+
+@bot.command(aliases=["mupdate"])
+async def monster_update_sheet(ctx: commands.Context, url=""):
+    try:
+        character = monsterMapRepo.get_character(ctx.guild.id, ctx.author.id)
+        old_actions_data = pd.read_json(io.StringIO(character[3]))
+        url = character[4]
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        df_data = get_df(spreadsheet_id, "data")
+        actions_data = get_df(spreadsheet_id, "actions")
+
+        # clean empty cells
+        actions_data = actions_data.applymap(
+            lambda x: x.strip() if isinstance(x, str) else x)
+        actions_data['MaxUsages'] = actions_data['MaxUsages'].replace('', 0)
+        actions_data['Usages'] = actions_data['Usages'].replace('', 0)
+        actions_data = actions_data.replace('#REF!', None)
+        actions_data = actions_data[
+            actions_data['Name'].str.strip().astype(bool)
+        ]
+        actions_data = actions_data.dropna()
+        df_data = df_data.replace('#REF!', None)
+        df_data = df_data.dropna()
+
+        old_actions_data['Usages_numeric'] = pd.to_numeric(
+            old_actions_data['Usages'], errors='coerce').fillna(0)
+        madf = pd.merge(
+            actions_data,
+            old_actions_data[['Name', 'Usages_numeric']],
+            on='Name',
+            how='left'
+        )
+        madf['Usages'] = madf['Usages_numeric'].combine_first(
+            madf['Usages']
+        )
+        madf = madf.drop(columns=['Usages_numeric'])
+
+        name = "Monsters"
+        monsterMapRepo.set_character(
+            ctx.guild.id,
+            ctx.author.id,
+            name,
+            df_data.to_json(),
+            madf.to_json(),
+            sheet_url=url)
+        await ctx.send(f"Sheet `{name}` is updated.")
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+
+@bot.command(aliases=["msheet"])
+async def monster_sheet(ctx: commands.Context, *, args: str = ""):
+    character = monsterMapRepo.get_character(ctx.guild.id, ctx.author.id)
+    df_data = pd.read_json(io.StringIO(character[2]))
+    df_actions = pd.read_json(io.StringIO(character[3]))
+    possible_monster = df_data[df_data['monster_name'].str.contains(
+        args,
+        na=False,
+        case=False
+        )].drop_duplicates(subset='monster_name')
+    if len(possible_monster) <= 0:
+        await ctx.send("No actions found")
+        return None
+    elif len(possible_monster) > 1:
+        choosen = await get_user_choice(possible_monster, 'monster_name', ctx)
+        if choosen is None:
+            return None
+    else:
+        choosen = 0
+    monster_name = possible_monster['monster_name'].iloc[choosen]
+    monster = df_data[df_data['monster_name'] == monster_name]
+    monster_action = df_actions[df_actions['MonsterName'] == monster_name]
+
+    data_dict = create_data_dict(monster)
+    embed = create_embed(data_dict)
+
+    await ctx.send(embed=embed)
+    await monster_action_list(ctx, monster_action, monster_name)
+
+
+async def monster_action_list(
+        ctx: commands.Context,
+        actions: pd.DataFrame,
+        monster_name: str
+):
+    if actions.empty:
+        await ctx.send("No actions found for this monster.")
+        return None
+    embeds = create_action_list_embed(monster_name, actions)
+    view = Paginator(ctx.author, embeds)
+    if len(embeds) <= 1:
+        view = None
+    await ctx.send(embed=embeds[0], view=view)
+
+
+@bot.command(aliases=["mreset"])
+async def monster_reset(ctx: commands.Context, *, args=None):
+    try:
+        await ctx.message.delete()
+        character = monsterMapRepo.get_character(ctx.guild.id, ctx.author.id)
+        actions = pd.read_json(io.StringIO(character[3]))
+        if args is None:
+            actions['Usages'] = actions['MaxUsages']
+            message = "All actions are reset."
+        else:
+            max_usages = actions['MaxUsages']
+            actions.loc[actions['ResetOn'] == args, 'Usages'] = max_usages
+            message = f"`{args}` actions are reset."
+        monsterMapRepo.update_character(character[0], None, actions.to_json())
+        embed = discord.Embed()
+        embed.title = f"{character[1]}'s Actions"
+        description = ""
+        for i, row in actions.iterrows():
+            if row['MaxUsages'] <= 0:
+                continue
+            usages_quota = f"({row['Usages']}/{row['MaxUsages']})"
+            description += f"- **{row['Name']}** {usages_quota}\n"
+        embed.description = description
+        await ctx.send(message, embed=embed)
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+
+@bot.command(aliases=["ma"])
+async def monster_action(ctx: commands.Context, *, args=None):
+    try:
+        await ctx.message.delete()
+        character = monsterMapRepo.get_character(ctx.guild.id, ctx.author.id)
+        sheet_id = character[0]
+        data = pd.read_json(io.StringIO(character[2]))
+        actions = pd.read_json(io.StringIO(character[3]))
+        if args is None:
+            await ctx.send(
+                "Please specify action to roll.\n"
+                "Use ;;msheet to see available actions.")
+            return
+        args = translate_cvar(args, data)
+        embed = await handle_action_monster(args, actions, ctx, data, sheet_id)
+        if embed is None:
+            return
+        await ctx.send(embed=embed)
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again. " + str(e))
+
+
+async def handle_action_monster(
+        command: str,
+        df: pd.DataFrame,
+        ctx: commands.Context,
+        data: pd.DataFrame,
+        sheet_id: str):
+    ap = parse_command(command)
+    df['ActionName'] = df['MonsterName'] + ": " + df['Name']
+    possible_action = df[df['Name'].str.contains(
+        ap.name,
+        na=False,
+        case=False
+        )]
+    if len(possible_action) <= 0:
+        await ctx.send("No actions found")
+        return None
+    elif len(possible_action) > 1:
+        choosen = await get_user_choice(possible_action, 'ActionName', ctx)
+        if choosen is None:
+            return None
+    else:
+        choosen = 0
+    name = possible_action['MonsterName'].iloc[choosen]
+    embed = create_action_result_embed(possible_action, choosen, name, ap)
+    max_usages = possible_action['MaxUsages'].iloc[choosen]
+    usages = possible_action['Usages'].iloc[choosen]
+    if max_usages > 0:
+        action_name = possible_action['Name'].iloc[choosen]
+        new_usages = usages - ap.usages
+        increment = f" ({format_bonus(str(-ap.usages))})"
+        if new_usages < 0:
+            new_usages = usages
+            embed.title = f"{name} cannot use {action_name}."
+            increment = f" (Out of Usages; {format_bonus(str(-ap.usages))})"
+        elif new_usages > max_usages:
+            new_usages = max_usages
+        usages_value = draw_quota(max_usages, new_usages)
+        usages_value += increment
+        embed.add_field(name=action_name, value=usages_value, inline=False)
+        df.loc[df['Name'] == action_name, 'Usages'] = new_usages
+        charaRepo.update_character(sheet_id, None, df.to_json())
+    return embed
+
+
+@bot.command(aliases=["mc"])
+async def monster_check(ctx: commands.Context, *, args=None):
+    try:
+        await ctx.message.delete()
+        if args is None:
+            await ctx.send("Please specify check to roll.")
+            return
+        character = monsterMapRepo.get_character(ctx.guild.id, ctx.author.id)
+        data = pd.read_json(io.StringIO(character[2]))
+        embed = await handle_check_monster(args, data, ctx)
+        if embed is None:
+            return
+        await ctx.send(embed=embed)
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+
+async def handle_check_monster(
+        command: str,
+        df: pd.DataFrame,
+        ctx: commands.Context):
+    ap = parse_command(command)
+    rollable_check = df[df['is_rollable'] == 'TRUE']
+    rollable_check['monster_field_name'] = (
+        rollable_check['monster_name'] + ": " + rollable_check['field_name']
+    )
+    possible_check = rollable_check[
+        rollable_check['monster_field_name'].str.contains(
+            ap.name, case=False
+        )
+    ]
+    # ap.thumbnail = df[df['field_name'] == 'Thumbnail']['value'].iloc[0]
+    if len(possible_check) <= 0:
+        await ctx.send("No such check found.")
+        return None
+    elif len(possible_check) > 1:
+        choosen = await get_user_choice(
+            possible_check, 'monster_field_name', ctx)
+        if choosen is None:
+            return None
+    else:
+        choosen = 0
+    name = possible_check['monster_name'].iloc[choosen]
+    return create_check_result_embed(possible_check, choosen, name, ap)
+
+
 if __name__ == "__main__":
     charaRepo = CharacterUserMapRepository()
     gachaRepo = GachaMapRepository()
     downtimeRepo = DowntimeMapRepository()
     monsterRepo = MonsterListRepository()
+    monsterMapRepo = MonstersUserMapRepository()
     main()

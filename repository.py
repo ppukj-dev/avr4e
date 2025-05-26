@@ -357,3 +357,88 @@ class MonsterListRepository(MySQLRepository):
             db.cursor.execute(query, values)
             result = db.cursor.fetchall()
         return result
+
+
+class MonstersUserMapRepository(Repository):
+    def __init__(self):
+        super().__init__()
+        self.connection = sqlite3.connect("database/avr4e.db")
+        self.cursor = self.connection.cursor()
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS monsters_user_map (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            guild_id VARCHAR(255) NOT NULL,
+            user_id VARCHAR(255) NOT NULL,
+            character_name VARCHAR(255) NOT NULL,
+            data TEXT NOT NULL,
+            actions TEXT NOT NULL,
+            sheet_url TEXT NOT NULL,
+            UNIQUE (guild_id, user_id)
+        )""")
+        self.cursor.close()
+        self.connection.close()
+
+    def get_character(self, guild_id: str, user_id: str) -> tuple:
+        query = """
+        SELECT
+            id,
+            character_name,
+            data,
+            actions,
+            sheet_url
+        FROM monsters_user_map
+        WHERE guild_id = ? AND user_id = ?
+        LIMIT 1
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id, user_id))
+            result = db.cursor.fetchone()
+
+        return result
+
+    def set_character(
+            self,
+            guild_id: str,
+            user_id: str,
+            character_name: str,
+            data: str,
+            actions: str,
+            sheet_url: str
+            ) -> None:
+        query = """
+        INSERT INTO monsters_user_map (
+            guild_id, user_id, character_name, data, actions,
+            sheet_url
+        )
+        VALUES (
+            ?, ?, ?, ?, ?,
+            ?
+        )
+        ON CONFLICT (guild_id, user_id)
+            DO UPDATE SET
+                character_name = ?,
+                data = ?,
+                actions = ?,
+                sheet_url = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (
+                guild_id, user_id,
+                character_name, data, actions, sheet_url,
+                character_name, data, actions, sheet_url))
+            db.connection.commit()
+
+    def update_character(self, id: int, data: str, actions: str) -> None:
+        query = """
+        UPDATE monsters_user_map
+        SET
+            data = COALESCE(?, data),
+            actions = COALESCE(?, actions)
+        WHERE id = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (data, actions, id))
+            db.connection.commit()
