@@ -1421,7 +1421,8 @@ async def downtime(ctx: commands.Context, *, args=None):
                 ctx.channel.name,
                 ctx.author.id,
                 ctx.author.name,
-                character
+                character,
+                event
             )
         except Exception as e:
             print(e)
@@ -1491,7 +1492,8 @@ def create_gacha_log_df(
             channel_name: str,
             user_id: int,
             user_name: str,
-            result: str
+            result: str,
+            details: str = None
         ) -> bool:
     try:
         data = {
@@ -1503,6 +1505,8 @@ def create_gacha_log_df(
             "user_name": [user_name],
             "result": [result]
         }
+        if details:
+            data["details"] = [details]
         log_df = pd.DataFrame(data=data)
         log_result_to_sheet(spreadsheet_id, log_df)
         return True
