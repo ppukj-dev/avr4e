@@ -791,45 +791,51 @@ async def check(ctx: commands.Context, *, args=None):
         await ctx.send("Error. Please check input again.")
 
 
+def perform_check_roll(
+        possible_check: pd.DataFrame,
+        chosen: int,
+        ap: ActionParam):
+    if ap.is_adv and ap.is_dis:
+        dice_expr = "1d20"
+    elif ap.is_adv:
+        dice_expr = "2d20kh1"
+    elif ap.is_dis:
+        dice_expr = "2d20kl1"
+    else:
+        dice_expr = "1d20"
+
+    modifier = format_number(possible_check['value'].iloc[chosen])
+    check_name = possible_check['field_name'].iloc[chosen]
+
+    base_expr = f"{dice_expr}{modifier}{ap.d20_bonus}"
+    if ap.is_halved:
+        base_expr = halve_flat_modifiers(base_expr)
+
+    results = [d20.roll(base_expr) for _ in range(ap.multiroll)]
+    return str(check_name), results
+
+
 def create_check_result_embed(
         possible_check: pd.DataFrame,
         choosen: int,
         name: str,
         ap: ActionParam):
     embed = discord.Embed()
-    modifier = possible_check['value'].iloc[choosen]
-    check_name = possible_check['field_name'].iloc[choosen]
-
+    results = []
+    check_name, results = perform_check_roll(possible_check, choosen, ap)
     embed.title = f"{name} makes {check_name} check!"
-    if ap.multiroll > 1:
-        for i in range(ap.multiroll):
-            dice = "1d20"
-            if ap.is_adv and ap.is_dis:
-                pass
-            elif ap.is_adv:
-                dice = "2d20kh1"
-            elif ap.is_dis:
-                dice = "2d20kl1"
-            expression = dice + format_number(modifier) + str(ap.d20_bonus)
-            expression = expression_str(expression, ap.is_halved)
-            check_result = d20.roll(expression)
+    if len(results) <= 0:
+        embed.description = "No such check found."
+        return embed
+    if len(results) == 1:
+        embed.description = f"{results[0]}"
+    else:
+        for i in range(len(results)):
             embed.add_field(
                 name=f"Check {i+1}",
-                value=check_result,
+                value=results[i],
                 inline=True
             )
-    else:
-        dice = "1d20"
-        if ap.is_adv and ap.is_dis:
-            pass
-        elif ap.is_adv:
-            dice = "2d20kh1"
-        elif ap.is_dis:
-            dice = "2d20kl1"
-        expression = dice + format_number(modifier) + str(ap.d20_bonus)
-        expression = expression_str(expression, ap.is_halved)
-        check_result = d20.roll(expression)
-        embed.description = f"{check_result}"
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
     return embed
