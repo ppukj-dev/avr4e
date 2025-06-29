@@ -178,6 +178,7 @@ pyrightconfig.json
 # sqlite db
 database/avr4e.db
 
+dnd_4e/combined.dnd40.merged.xml
 credentials.json
 _chat.py
 

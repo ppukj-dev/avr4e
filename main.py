@@ -19,6 +19,7 @@ from repository import CharacterUserMapRepository, GachaMapRepository
 from repository import DowntimeMapRepository
 from repository import MonsterListRepository
 from repository import MonstersUserMapRepository
+from dnd_xml_parser import read_character_file, character_to_excel
 import constant
 from pagination import Paginator
 from pydantic import BaseModel
@@ -2118,6 +2119,35 @@ async def monster_check(ctx: commands.Context, *, args=None):
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
+
+
+@bot.command(aliases=["cbload"])
+async def cb_generate(ctx: commands.Context):
+    attachment = (
+        ctx.message.attachments[0] if ctx.message.attachments else None
+    )
+    if attachment is None:
+        await ctx.send("Please provide a file.")
+        return
+    file = await attachment.read()
+    try:
+        await ctx.message.delete()
+        async with ctx.typing():
+            character = await read_character_file(file)
+            if character is None:
+                await ctx.send("Invalid character file.")
+                return
+            buffer = await character_to_excel(character)
+            buffer.seek(0)
+            await ctx.send(
+                content=(
+                    f"`{character.characterName}` sheet is generated."
+                ),
+                file=discord.File(buffer, filename="character.xlsx")
+            )
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error loading cbloader save file.")
 
 
 async def handle_check_monster(

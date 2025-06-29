@@ -6,3 +6,4 @@ fastapi
 pydantic
 gspread
 pillow
+openpyxl
