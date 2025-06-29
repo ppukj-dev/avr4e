@@ -109,6 +109,7 @@ class ActionParam():
     is_critical: bool = False
     usages: int = 1
     multiroll: int = 1
+    level: int = 0
 
 
 @app.post("/roll")
@@ -201,6 +202,7 @@ async def help(ctx):
     desc += "`;;c <skill> -b <amount>`\n"
     desc += "  - Human Mode: `;;a <action> -h` `;;c <skill> -h`\n"
     desc += "  - Multiroll X times: `;;a <action> -rr X` `;;c <skill> -rr X`\n"
+    desc += "  - Check Level DC: `;;c <skill> -l X`\n"
     desc += "  - Action Only:\n"
     desc += "    - Situational Damage: `;;a <action> -d <amount>`\n"
     desc += "    - Multi Target: `;;a <action> -t <target1> -t <target2>`\n"
@@ -504,7 +506,7 @@ def parse_command(message: str) -> ActionParam:
         "-b", "-d", "adv", "dis", "-adv", "-dis"
     ]
     general_args = [
-        "-h", "-crit", "-u", "crit", "-rr"
+        "-h", "-crit", "-u", "crit", "-rr", "-l"
     ]
     dict_of_args = {}
 
@@ -562,6 +564,8 @@ def parse_command(message: str) -> ActionParam:
             param.usages = int(splitted_message[value+1])
         elif key == "-rr":
             param.multiroll = int(splitted_message[value+1])
+        elif key == "-l":
+            param.level = int(splitted_message[value+1])
 
     for idx, target_string in enumerate(targets_string):
         target = parse_target_param(target_string)
@@ -841,6 +845,8 @@ def create_check_result_embed(
             )
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
+    if ap.level > 0:
+        level = ap.level
     if level > 0:
         emoji = {
             "Easy": "🟢ᴇᴀꜱʏ",
