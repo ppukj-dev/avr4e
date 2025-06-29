@@ -820,7 +820,9 @@ def create_check_result_embed(
         possible_check: pd.DataFrame,
         choosen: int,
         name: str,
-        ap: ActionParam):
+        ap: ActionParam,
+        level: int = 0
+):
     embed = discord.Embed()
     results = []
     check_name, results = perform_check_roll(possible_check, choosen, ap)
@@ -839,6 +841,20 @@ def create_check_result_embed(
             )
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
+    if level > 0:
+        emoji = {
+            "Easy": "<:easy:1388846742732144774>",
+            "Moderate": "<:medium:1388846777079169094>",
+            "Hard": "<:hard:1388846804296274011>",
+        }
+        dc = (
+            " | ".join(f"{emoji[difficulty]} {value}"
+                       for difficulty, value
+                       in constant.LEVEL_SKILL_DC[level].items())
+        )
+        embed.set_footer(
+            text=dc
+        )
     return embed
 
 
@@ -853,6 +869,8 @@ async def handle_check(
         ap.name, case=False
     )]
     ap.thumbnail = df[df['field_name'] == 'Thumbnail']['value'].iloc[0]
+    level = df[df['field_name'] == 'Level']['value'].values
+    level = int(level[0]) if len(level) > 0 else 0
     if len(possible_check) <= 0:
         await ctx.send("No such check found.")
         return None
@@ -862,7 +880,7 @@ async def handle_check(
             return None
     else:
         choosen = 0
-    return create_check_result_embed(possible_check, choosen, name, ap)
+    return create_check_result_embed(possible_check, choosen, name, ap, level)
 
 
 def get_spreadsheet_id(url: str):
