@@ -843,9 +843,9 @@ def create_check_result_embed(
         embed.set_thumbnail(url=ap.thumbnail)
     if level > 0:
         emoji = {
-            "Easy": "🟢Easy",
-            "Moderate": "🟡Medium",
-            "Hard": "🔴Hard",
+            "Easy": "🟢ᴇᴀꜱʏ",
+            "Moderate": "🟡ᴍᴏᴅᴇʀᴀᴛᴇ",
+            "Hard": "🔴ʜᴀʀᴅ",
         }
         dc = (
             " | ".join(f"{emoji[difficulty]} {value}"
