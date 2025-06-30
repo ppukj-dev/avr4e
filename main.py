@@ -876,7 +876,7 @@ async def handle_check(
     )]
     ap.thumbnail = df[df['field_name'] == 'Thumbnail']['value'].iloc[0]
     level = df[df['field_name'] == 'Level']['value'].values
-    level = parse_value(level[0]) if len(level) > 0 else 0
+    level = parse_value(level[0])
     if len(possible_check) <= 0:
         await ctx.send("No such check found.")
         return None
@@ -889,9 +889,17 @@ async def handle_check(
     return create_check_result_embed(possible_check, choosen, name, ap, level)
 
 
-def parse_value(value: str) -> int:
-    match = re.search(r'\d+', value)
-    return int(match.group()) if match else 0
+def parse_value(value) -> int:
+    try:
+        if type(value) is int:
+            return value
+        if type(value) is str:
+            match = re.search(r'\d+', value)
+            return int(match.group()) if match else 0
+        else:
+            int(value)
+    except Exception:
+        return 0
 
 
 def get_spreadsheet_id(url: str):
