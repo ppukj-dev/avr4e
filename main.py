@@ -33,7 +33,7 @@ from PIL import Image, ImageOps, ImageDraw
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot = commands.Bot(
-    command_prefix=";;",
+    command_prefix="!",
     intents=discord.Intents.all(),
     help_command=None
 )
@@ -2156,7 +2156,8 @@ async def monster_check(ctx: commands.Context, *, args=None):
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
-
+@bot.command(aliases=["i"])
+async def init(ctx: commands.Context):
 
 @bot.command(aliases=["cbload"])
 async def cb_generate(ctx: commands.Context):
