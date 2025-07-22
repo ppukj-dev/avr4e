@@ -108,6 +108,26 @@ class CharacterUserMapRepository(Repository):
             db.cursor.execute(query, (data, actions, id))
             db.connection.commit()
 
+    def get_all_characters(self, user_id=None):
+        if user_id:
+            query = """
+                    SELECT guild_id, user_id
+                    FROM character_user_map
+                    WHERE user_id = ? \
+                    """
+            with self as db:
+                db.cursor.execute(query, (user_id,))
+                result = db.cursor.fetchall()
+        else:
+            query = """
+                    SELECT guild_id, user_id
+                    FROM character_user_map \
+                    """
+            with self as db:
+                db.cursor.execute(query)
+                result = db.cursor.fetchall()
+        return result
+
 
 class GachaMapRepository(Repository):
     def __init__(self):

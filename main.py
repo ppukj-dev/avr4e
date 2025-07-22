@@ -2203,6 +2203,7 @@ async def init(ctx: commands.Context, *args: str):
     if args[0] == "begin":
         bot.init_lists[channel_id] = {
             "combatants": {},
+            "combatant_owners": {},
             "current_turn": 0,
             "round": 0,
             "active": True
@@ -2336,7 +2337,7 @@ async def init(ctx: commands.Context, *args: str):
             if interaction.user != ctx.author:
                 await interaction.response.send_message("You cannot use this button.", ephemeral=True)
                 return
-            bot.init_lists[channel_id] = {"combatants": {}, "current_turn": 0, "round": 0, "active": False}
+            bot.init_lists[channel_id] = {"combatants": {}, "combatant_owners": {}, "current_turn": 0, "round": 0, "active": False}
             await interaction.message.edit(content="Initiative tracker cleared.", view=None)
         async def cancel_callback(interaction):
             if interaction.user != ctx.author:
@@ -2354,20 +2355,29 @@ async def init(ctx: commands.Context, *args: str):
         if not bot.init_lists[channel_id]["combatants"]:
             await ctx.send("No active combat.")
             return
-        sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1], reverse=True)
+
+        sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
+
         bot.init_lists[channel_id]["current_turn"] += 1
         if bot.init_lists[channel_id]["current_turn"] >= len(sorted_init):
             bot.init_lists[channel_id]["current_turn"] = 0
             bot.init_lists[channel_id]["round"] += 1
-        current = sorted_init[bot.init_lists[channel_id]["current_turn"]]
-        initiative, ac, fort, ref, will = current[1]
-        await ctx.send(f"Now <@{ctx.author.id}> it's {current[0]}'s turn! (Initiative: {initiative})")
 
+        current = sorted_init[bot.init_lists[channel_id]["current_turn"]]
+        combatant_name = current[0]
+        initiative, ac, fort, ref, will = current[1]
+
+        owner_id = bot.init_lists[channel_id]["combatant_owners"].get(
+            combatant_name, ctx.author.id
+        )
+        await ctx.send(f"Now <@{owner_id}> it's {combatant_name}'s turn! (Initiative: {initiative})")
         message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
         message += "===============================\n"
-        for name, init in sorted_init:
-            message += f"{name}: {init}\n"
+        for combatant in sorted_init:
+            name, stats = combatant
+            message += f"{name}: {stats[0]} (AC: {stats[1]}, Fort: {stats[2]}, Ref: {stats[3]}, Will: {stats[4]})\n"
         message += "```"
+
         message_id = bot.init_lists[channel_id]["message_id"]
         try:
             message_obj = await ctx.channel.fetch_message(message_id)
