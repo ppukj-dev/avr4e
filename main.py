@@ -2156,8 +2156,228 @@ async def monster_check(ctx: commands.Context, *, args=None):
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
+
 @bot.command(aliases=["i"])
-async def init(ctx: commands.Context):
+async def init(ctx: commands.Context, *args: str):
+    channel_id = ctx.channel.id
+    if not hasattr(bot, 'init_lists'):
+        bot.init_lists = {}
+    if channel_id not in bot.init_lists:
+        bot.init_lists[channel_id] = {"combatants": {}, "current_turn": 0, "round": 0, "active": False}
+
+    if not args:
+        if not bot.init_lists[channel_id]["active"]:
+            await ctx.send("Initiative tracking has not started. Use !i begin to start tracking initiative.")
+            return
+
+        if not bot.init_lists[channel_id]["combatants"]:
+            message = f"```Current initiative: Round {bot.init_lists[channel_id]['round']}\n"
+            message += "===============================\n"
+            message += "No combatants have joined yet```"
+            sent_message = await ctx.send(message)
+            bot.init_lists[channel_id]["message_id"] = sent_message.id
+            return
+
+        sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
+        message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
+        message += "===============================\n"
+        for combatant in sorted_init:
+            name = combatant[0]
+            initiative, ac, fort, ref, will = combatant[1]
+
+            message += f"{name}: {initiative} (AC: {ac}, Fort: {fort}, Ref: {ref}, Will: {will})\n"
+        message += "```"
+        if not hasattr(bot.init_lists[channel_id], "message_id"):
+            sent_message = await ctx.send(message)
+            bot.init_lists[channel_id]["message_id"] = sent_message.id
+        else:
+            message_id = bot.init_lists[channel_id]["message_id"]
+            try:
+                message_obj = await ctx.channel.fetch_message(message_id)
+                await message_obj.edit(content=message)
+            except:
+                sent_message = await ctx.send(message)
+                bot.init_lists[channel_id]["message_id"] = sent_message.id
+        return
+
+    if args[0] == "begin":
+        bot.init_lists[channel_id] = {
+            "combatants": {},
+            "current_turn": 0,
+            "round": 0,
+            "active": True
+        }
+        message = "```Current initiative: Round 0\n===============================\nNo combatants have joined yet```"
+        sent_message = await ctx.send(message)
+        bot.init_lists[channel_id]["message_id"] = sent_message.id
+        return
+
+    if not bot.init_lists[channel_id]["active"]:
+        await ctx.send("Initiative tracking has not started. Use !i begin to start tracking initiative.")
+        return
+
+    if args[0] == "join":
+        character = charaRepo.get_character(ctx.guild.id, ctx.author.id)
+        if character is None:
+            await ctx.send("Please add your character sheet first using !add")
+            return
+
+        data = pd.read_json(io.StringIO(character[2]))
+        name = data[data['field_name'] == 'Name']['value'].iloc[0]
+        init_bonus = data[data['field_name'] == 'Initiative']['value'].iloc[0]
+        ac = data[data['field_name'] == 'AC']['value'].iloc[0]
+        fort = data[data['field_name'] == 'Fort']['value'].iloc[0]
+        ref = data[data['field_name'] == 'Reflex']['value'].iloc[0]
+        will = data[data['field_name'] == 'Will']['value'].iloc[0]
+
+        if not all((name, init_bonus, ac, fort, ref, will)):
+            await ctx.send(
+                f"Failed to fetch all required stats for initiative. Please check your character sheet contains Name, Initiative, AC, Fort, Reflex and Will.")
+            return
+
+        name = data[data['field_name'] == 'Name']['value'].iloc[0]
+        if name in bot.init_lists[channel_id]["combatants"]:
+            await ctx.send(f"{name} has already joined initiative.")
+            return
+
+        roll = d20.roll(f"1d20+{init_bonus}")
+        bot.init_lists[channel_id]["combatants"][name] = [roll.total, ac, fort, ref, will]
+        await ctx.send(f"{name} rolled {roll} for initiative")
+        await ctx.invoke(bot.get_command("i"))
+
+    elif args[0] == "add":
+        if len(args) < 4 or args[2] != "-p":
+            await ctx.send(
+                "Usage: !i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
+            return
+        try:
+            initiative = int(args[3])
+            name = args[1]
+
+            # Default values
+            ac = "n/a"
+            fort = "n/a"
+            ref = "n/a"
+            will = "n/a"
+
+            # Parse optional stats if provided
+            i = 4
+            while i < len(args):
+                if args[i] == "-ac" and i + 1 < len(args):
+                    ac = int(args[i + 1])
+                    i += 2
+                elif args[i] == "-fort" and i + 1 < len(args):
+                    fort = int(args[i + 1])
+                    i += 2
+                elif args[i] == "-ref" and i + 1 < len(args):
+                    ref = int(args[i + 1])
+                    i += 2
+                elif args[i] == "-will" and i + 1 < len(args):
+                    will = int(args[i + 1])
+                    i += 2
+                else:
+                    i += 1
+
+            bot.init_lists[channel_id]["combatants"][name] = [initiative, ac, fort, ref, will]
+            await ctx.send(f"Added {name} with initiative {initiative}")
+
+            sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0],
+                                 reverse=True)
+            message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
+            message += "===============================\n"
+            for name, init in sorted_init:
+                message += f"{name}: {init[0]} (AC: {init[1]}, Fort: {init[2]}, Ref: {init[3]}, Will: {init[4]})\n"
+            message += "```"
+            message_id = bot.init_lists[channel_id]["message_id"]
+            try:
+                message_obj = await ctx.channel.fetch_message(message_id)
+                await message_obj.edit(content=message)
+            except:
+                sent_message = await ctx.send(message)
+                bot.init_lists[channel_id]["message_id"] = sent_message.id
+        except ValueError:
+            await ctx.send("Initiative must be a number")
+
+    elif args[0] == "edit":
+        if len(args) < 4 or args[2] != "-p":
+            await ctx.send("Usage: !i edit <combatant name> -p <target initiative>")
+            return
+        try:
+            initiative = int(args[3])
+            name = args[1]
+            if name in bot.init_lists[channel_id]["combatants"]:
+                bot.init_lists[channel_id]["combatants"][name] = initiative
+                await ctx.send(f"Updated {name}'s initiative to {initiative}")
+
+                sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1],
+                                     reverse=True)
+                message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
+                message += "===============================\n"
+                for name, init in sorted_init:
+                    message += f"{name}: {init}\n"
+                message += "```"
+                message_id = bot.init_lists[channel_id]["message_id"]
+                try:
+                    message_obj = await ctx.channel.fetch_message(message_id)
+                    await message_obj.edit(content=message)
+                except:
+                    sent_message = await ctx.send(message)
+                    bot.init_lists[channel_id]["message_id"] = sent_message.id
+            else:
+                await ctx.send(f"{name} is not in the initiative tracker.")
+        except ValueError:
+            await ctx.send("Initiative must be a number")
+
+    elif args[0] == "end":
+        confirm_view = discord.ui.View()
+        confirm_button = discord.ui.Button(label="Confirm", style=discord.ButtonStyle.danger)
+        cancel_button = discord.ui.Button(label="Cancel", style=discord.ButtonStyle.secondary)
+        async def confirm_callback(interaction):
+            if interaction.user != ctx.author:
+                await interaction.response.send_message("You cannot use this button.", ephemeral=True)
+                return
+            bot.init_lists[channel_id] = {"combatants": {}, "current_turn": 0, "round": 0, "active": False}
+            await interaction.message.edit(content="Initiative tracker cleared.", view=None)
+        async def cancel_callback(interaction):
+            if interaction.user != ctx.author:
+                await interaction.response.send_message("You cannot use this button.", ephemeral=True)
+                return
+
+            await interaction.message.edit(content="Initiative tracker was not cleared.", view=None)
+        confirm_button.callback = confirm_callback
+        cancel_button.callback = cancel_callback
+        confirm_view.add_item(confirm_button)
+        confirm_view.add_item(cancel_button)
+        await ctx.send("**Are you sure you want to end the initiative tracker?**", view=confirm_view)
+
+    elif args[0] == "next":
+        if not bot.init_lists[channel_id]["combatants"]:
+            await ctx.send("No active combat.")
+            return
+        sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1], reverse=True)
+        bot.init_lists[channel_id]["current_turn"] += 1
+        if bot.init_lists[channel_id]["current_turn"] >= len(sorted_init):
+            bot.init_lists[channel_id]["current_turn"] = 0
+            bot.init_lists[channel_id]["round"] += 1
+        current = sorted_init[bot.init_lists[channel_id]["current_turn"]]
+        initiative, ac, fort, ref, will = current[1]
+        await ctx.send(f"Now <@{ctx.author.id}> it's {current[0]}'s turn! (Initiative: {initiative})")
+
+        message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
+        message += "===============================\n"
+        for name, init in sorted_init:
+            message += f"{name}: {init}\n"
+        message += "```"
+        message_id = bot.init_lists[channel_id]["message_id"]
+        try:
+            message_obj = await ctx.channel.fetch_message(message_id)
+            await message_obj.edit(content=message)
+        except:
+            sent_message = await ctx.send(message)
+            bot.init_lists[channel_id]["message_id"] = sent_message.id
+    else:
+        await ctx.send(f"Unrecognized subcommand: {args[0]}. Type `!help` for assistance.")
+
 
 @bot.command(aliases=["cbload"])
 async def cb_generate(ctx: commands.Context):
