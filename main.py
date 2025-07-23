@@ -2243,10 +2243,23 @@ async def init(ctx: commands.Context, *args: str):
             await ctx.send(f"{name} has already joined initiative.")
             return
 
-        roll = d20.roll(f"1d20+{init_bonus}")
-        bot.init_lists[channel_id]["combatants"][name] = [roll.total, ac, fort, ref, will]
-        await ctx.send(f"{name} rolled {roll} for initiative")
-        await ctx.invoke(bot.get_command("i"))
+        bonus = 0
+        if "-b" in args:
+            try:
+                b_index = args.index("-b")
+                if b_index + 1 < len(args):
+                    bonus = int(args[b_index + 1])
+            except ValueError:
+                await ctx.send("Invalid bonus value. Bonus must be an integer.")
+                return
+        try:
+            total_bonus = int(init_bonus) + bonus
+            roll = d20.roll(f"1d20+{total_bonus}")
+            bot.init_lists[channel_id]["combatants"][name] = [roll.total, ac, fort, ref, will]
+            await ctx.send(f"{name} rolled {roll} for initiative")
+            await ctx.invoke(bot.get_command("i"))
+        except Exception as e:
+            await ctx.send(f"Error when rolling initiative: {str(e)}")
 
     elif args[0] == "add":
         if len(args) < 4 or args[2] != "-p":
@@ -2263,7 +2276,6 @@ async def init(ctx: commands.Context, *args: str):
             ref = "n/a"
             will = "n/a"
 
-            # Parse optional stats if provided
             i = 4
             while i < len(args):
                 if args[i] == "-ac" and i + 1 < len(args):
@@ -2301,35 +2313,51 @@ async def init(ctx: commands.Context, *args: str):
         except ValueError:
             await ctx.send("Initiative must be a number")
 
+
     elif args[0] == "edit":
         if len(args) < 4 or args[2] != "-p":
             await ctx.send("Usage: !i edit <combatant name> -p <target initiative>")
             return
         try:
-            initiative = int(args[3])
-            name = args[1]
-            if name in bot.init_lists[channel_id]["combatants"]:
-                bot.init_lists[channel_id]["combatants"][name] = initiative
-                await ctx.send(f"Updated {name}'s initiative to {initiative}")
+            target_initiative = int(args[3])
+            partial_name = args[1].lower()
 
-                sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1],
-                                     reverse=True)
-                message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
-                message += "===============================\n"
-                for name, init in sorted_init:
-                    message += f"{name}: {init}\n"
-                message += "```"
-                message_id = bot.init_lists[channel_id]["message_id"]
-                try:
-                    message_obj = await ctx.channel.fetch_message(message_id)
-                    await message_obj.edit(content=message)
-                except:
-                    sent_message = await ctx.send(message)
-                    bot.init_lists[channel_id]["message_id"] = sent_message.id
-            else:
-                await ctx.send(f"{name} is not in the initiative tracker.")
+            matched_name = None
+            for combatant_name in bot.init_lists[channel_id]["combatants"]:
+                if partial_name in combatant_name.lower():
+                    matched_name = combatant_name
+                    break
+            if matched_name is None:
+                await ctx.send(f"No combatant matching '{partial_name}' found in the initiative tracker.")
+                return
+            current_data = bot.init_lists[channel_id]["combatants"][matched_name]
+            if not isinstance(current_data, list) or len(current_data) != 5:
+                await ctx.send(f"Corrupted data for {matched_name}, unable to update.")
+                return
+            bot.init_lists[channel_id]["combatants"][matched_name] = [
+                target_initiative,
+                current_data[1],  # AC
+                current_data[2],  # Fort
+                current_data[3],  # Ref
+                current_data[4],  # Will
+            ]
+            await ctx.send(f"Updated {matched_name}'s initiative to {target_initiative}")
+            sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
+            message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
+            message += "===============================\n"
+            for name, stats in sorted_init:
+                initiative, ac, fort, ref, will = stats
+                message += f"{name}: {initiative} (AC: {ac}, Fort: {fort}, Ref: {ref}, Will: {will})\n"
+            message += "```"
+            message_id = bot.init_lists[channel_id]["message_id"]
+            try:
+                message_obj = await ctx.channel.fetch_message(message_id)
+                await message_obj.edit(content=message)
+            except:
+                sent_message = await ctx.send(message)
+                bot.init_lists[channel_id]["message_id"] = sent_message.id
         except ValueError:
-            await ctx.send("Initiative must be a number")
+            await ctx.send("Initiative must be a number.")
 
     elif args[0] == "end":
         confirm_view = discord.ui.View()
