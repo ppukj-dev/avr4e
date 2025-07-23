@@ -2204,9 +2204,11 @@ async def init(ctx: commands.Context, *args: str):
         bot.init_lists[channel_id] = {
             "combatants": {},
             "combatant_owners": {},
+            "current_turn": -1,
             "current_turn": 0,
             "round": 0,
-            "active": True
+            "active": True,
+            "started": False
         }
         message = "```Current initiative: Round 0\n===============================\nNo combatants have joined yet```"
         sent_message = await ctx.send(message)
@@ -2358,19 +2360,20 @@ async def init(ctx: commands.Context, *args: str):
 
         sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
 
-        bot.init_lists[channel_id]["current_turn"] += 1
-        if bot.init_lists[channel_id]["current_turn"] >= len(sorted_init):
+        if not bot.init_lists[channel_id].get("started", False):
+            bot.init_lists[channel_id]["started"] = True
             bot.init_lists[channel_id]["current_turn"] = 0
-            bot.init_lists[channel_id]["round"] += 1
+        else:
+            bot.init_lists[channel_id]["current_turn"] += 1
+            if bot.init_lists[channel_id]["current_turn"] >= len(sorted_init):
+                bot.init_lists[channel_id]["current_turn"] = 0
+                bot.init_lists[channel_id]["round"] += 1
 
         current = sorted_init[bot.init_lists[channel_id]["current_turn"]]
         combatant_name = current[0]
         initiative, ac, fort, ref, will = current[1]
 
-        owner_id = bot.init_lists[channel_id]["combatant_owners"].get(
-            combatant_name, ctx.author.id
-        )
-        await ctx.send(f"Now <@{owner_id}> it's {combatant_name}'s turn! (Initiative: {initiative})")
+        await ctx.send(f"Now it's {combatant_name}'s turn! (Initiative: {initiative})")
         message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
         message += "===============================\n"
         for combatant in sorted_init:
