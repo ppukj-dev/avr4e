@@ -10,3 +10,5 @@ openpyxl
 markdownify
 bs4
 yatg
+pymongo
+flask
