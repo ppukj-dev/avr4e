@@ -130,7 +130,7 @@ async def roll(roll: Roll):
         "channel": f"{channel_id}",
     }
 
-
+# add get data later here
 
 def find_inline_roll(content: str):
     pattern = r'\[\[(.*?)\]\]'
