@@ -7,3 +7,6 @@ pydantic
 gspread
 pillow
 openpyxl
+markdownify
+bs4
+yatg
