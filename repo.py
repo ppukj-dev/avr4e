@@ -14,6 +14,7 @@ def get_data(table: str, word: str) -> str:
             host=MYSQL_HOST,
             user=MYSQL_USER,
             password=MYSQL_PASS,
+            port=3306,
             database=MYSQL_DB
     )
 

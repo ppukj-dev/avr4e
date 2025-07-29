@@ -4,6 +4,8 @@ import asyncio
 import markdownify
 import yatg
 import bs4
+import pymongo
+import flask
 import discord
 import re
 import os
