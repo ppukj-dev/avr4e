@@ -1255,19 +1255,20 @@ times = [
 
 
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2025, 4, 25, 0, 0, 0, tzinfo=utc)
+    start_date = datetime.datetime(2025, 8, 31, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     delta = now - start_date
     total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
     date = get_in_game_date(total_sessions+1)
     chapter_number = (total_sessions - 1) // 7 + 1
     session_number = f"{total_sessions:02}"
-    calendar_name = f"{chapter_number}.{session_number} - {date}"
+    calendar_name = f"{delta} more days from GO!"
+    # calendar_name = f"{chapter_number}.{session_number} - {date}"
     return calendar_name
 
 
 async def update_calendar():
-    channel_calendar = bot.get_channel(1343085306999734370)
+    channel_calendar = bot.get_channel(1396001668633722931)
     channel_name = f"📅 {get_calendar_name()}"
     print(channel_name)
     try:
@@ -1327,16 +1328,16 @@ async def update_ds(guild_id: int):
 @tasks.loop(time=times)
 async def daily_task_run():
     await update_calendar()
-    await update_ds(1343085306571915276)
-    bot_dump_channel = bot.get_channel(1343085307628617900)
+    # await update_ds(1343085306571915276)
+    bot_dump_channel = bot.get_channel(1395988000474660935)
     await bot_dump_channel.send(
         "Done updating calendar and downtime.")
 
 
 def get_in_game_date(week_number):
     months = [
-        "Primaris", "Sequora", "Trionyx", "Quadrael",
-        "Pentara", "Hexune", "Sephyros", "Octyra"
+        "Terra", "Marzen", "Saturna", "Venira",
+        "Juvion", "Mercion", "Urantis", "Nevaris"
     ]
 
     month_weeks = []
@@ -1353,10 +1354,10 @@ def get_in_game_date(week_number):
     for month_index, weeks_in_month in enumerate(month_weeks):
         if current_week <= weeks_in_month:
             week_label = {
-                1: "1st Week",
-                2: "2nd Week",
-                3: "3rd Week",
-                4: "4th Week"
+                1: "Date of 1-8",
+                2: "Date of 9-16",
+                3: "Date of 17-24",
+                4: "Date of 25-30"
             }[current_week]
             return f"{months[month_index]} {week_label}"
         else:
@@ -2341,7 +2342,7 @@ async def monster_check(ctx: commands.Context, *, args=None):
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
-@bot.command(aliases=["i"])
+@bot.command(aliases=["i", "init"])
 async def init(ctx: commands.Context, *args: str):
     channel_id = ctx.channel.id
     if not hasattr(bot, 'init_lists'):
