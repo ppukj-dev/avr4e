@@ -1257,12 +1257,13 @@ times = [
 def get_calendar_name() -> str:
     start_date = datetime.datetime(2025, 8, 31, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
-    delta = now - start_date
+    delta = start_date - now
+    days = abs(delta.days)
     total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
     date = get_in_game_date(total_sessions+1)
     chapter_number = (total_sessions - 1) // 7 + 1
     session_number = f"{total_sessions:02}"
-    calendar_name = f"{delta} more days from GO!"
+    calendar_name = f"{days} more days from GO!"
     # calendar_name = f"{chapter_number}.{session_number} - {date}"
     return calendar_name
 
