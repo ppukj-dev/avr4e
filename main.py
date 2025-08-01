@@ -2519,7 +2519,7 @@ async def init(ctx: commands.Context, *args: str):
                 await ctx.send(f"No combatant matching '{partial_name}' found in the initiative tracker.")
                 return
             current_data = bot.init_lists[channel_id]["combatants"][matched_name]
-            if not isinstance(current_data, list) or len(current_data) != 6:
+            if not isinstance(current_data, list) or len(current_data) != 5:
                 await ctx.send(f"Corrupted data for {matched_name}, unable to update.")
                 return
             bot.init_lists[channel_id]["combatants"][matched_name] = [
@@ -2527,8 +2527,7 @@ async def init(ctx: commands.Context, *args: str):
                 current_data[1],
                 current_data[2],
                 current_data[3],
-                current_data[4],
-                author_id
+                current_data[4]
             ]
             await ctx.send(f"Updated {matched_name}'s initiative to {target_initiative}")
             sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
