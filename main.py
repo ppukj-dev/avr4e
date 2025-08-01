@@ -2344,7 +2344,7 @@ async def monster_check(ctx: commands.Context, *, args=None):
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
 
-@bot.command(aliases=["i", "init"])
+@bot.command(aliases=["i", "initiative"])
 async def init(ctx: commands.Context, *args: str):
     channel_id = ctx.channel.id
     if not hasattr(bot, 'init_lists'):
