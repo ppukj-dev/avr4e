@@ -2442,7 +2442,7 @@ async def init(ctx: commands.Context, *args: str):
         try:
             total_bonus = int(init_bonus) + bonus
             roll = d20.roll(f"1d20+{total_bonus}")
-            bot.init_lists[channel_id]["combatants"][name] = [roll.total, ac, fort, ref, will]
+            bot.init_lists[channel_id]["combatants"][name] = [roll.total, ac, fort, ref, will, author.id]
             await ctx.send(f"{name} rolled {roll} for initiative")
             await ctx.invoke(bot.get_command("i"))
         except Exception as e:
@@ -2586,10 +2586,10 @@ async def init(ctx: commands.Context, *args: str):
 
         current = sorted_init[bot.init_lists[channel_id]["current_turn"]]
         combatant_name = current[0]
-        initiative, ac, fort, ref, will = current[1]
+        initiative, ac, fort, ref, will, author_id = current[1]
 
         await ctx.send(f"Now it's {combatant_name}'s turn! (Initiative: {initiative})")
-        message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
+        message = f"```Current initiative: "<@" + message.author.id + ">" {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
         message += "===============================\n"
         for combatant in sorted_init:
             name, stats = combatant
