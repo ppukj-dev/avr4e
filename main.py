@@ -2442,7 +2442,7 @@ async def init(ctx: commands.Context, *args: str):
         try:
             total_bonus = int(init_bonus) + bonus
             roll = d20.roll(f"1d20+{total_bonus}")
-            bot.init_lists[channel_id]["combatants"][name] = [roll.total, ac, fort, ref, will, author.id]
+            bot.init_lists[channel_id]["combatants"][name] = [roll.total, ac, fort, ref, will, ctx.author.id]
             await ctx.send(f"{name} rolled {roll} for initiative")
             await ctx.invoke(bot.get_command("i"))
         except Exception as e:
