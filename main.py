@@ -2480,7 +2480,7 @@ async def init(ctx: commands.Context, *args: str):
                 else:
                     i += 1
 
-            bot.init_lists[channel_id]["combatants"][name] = [initiative, ac, fort, ref, will]
+            bot.init_lists[channel_id]["combatants"][name] = [initiative, ac, fort, ref, will, author_id]
             await ctx.send(f"Added {name} with initiative {initiative}")
 
             sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0],
@@ -2527,6 +2527,7 @@ async def init(ctx: commands.Context, *args: str):
                 current_data[2],
                 current_data[3],
                 current_data[4],
+                author_id
             ]
             await ctx.send(f"Updated {matched_name}'s initiative to {target_initiative}")
             sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
