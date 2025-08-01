@@ -2420,9 +2420,9 @@ async def init(ctx: commands.Context, *args: str):
         ref = data[data['field_name'] == '`REF`']['value'].iloc[0]
         will = data[data['field_name'] == '`WILL`']['value'].iloc[0]
 
-        if not all((name, init_bonus, ac, fort, ref, will)):
+        if any(pd.isna(val) for val in (name, init_bonus, ac, fort, ref, will)):
             await ctx.send(
-                f"Failed to fetch all required stats for initiative. Please check your character sheet contains Name, Initiative, AC, Fort, Reflex and Will.")
+                "Failed to fetch all required stats for initiative. Please check your character sheet contains Name, Initiative, AC, Fort, Reflex and Will.")
             return
 
         name = data[data['field_name'] == 'Name']['value'].iloc[0]
