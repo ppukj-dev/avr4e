@@ -2462,6 +2462,7 @@ async def init(ctx: commands.Context, *args: str):
             fort = "n/a"
             ref = "n/a"
             will = "n/a"
+            author_id = ctx.author.id
 
             i = 4
             while i < len(args):
@@ -2526,8 +2527,7 @@ async def init(ctx: commands.Context, *args: str):
                 current_data[1],
                 current_data[2],
                 current_data[3],
-                current_data[4],
-                author_id
+                current_data[4]
             ]
             await ctx.send(f"Updated {matched_name}'s initiative to {target_initiative}")
             sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
