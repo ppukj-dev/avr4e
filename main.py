@@ -1257,13 +1257,14 @@ times = [
 def get_calendar_name() -> str:
     start_date = datetime.datetime(2025, 8, 31, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
-    delta = start_date - now
-    days = abs(delta.days)
+    startdelta = start_date - now
+    days_start = abs(startdelta.days)
+    delta = now - start_date
     total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
     date = get_in_game_date(total_sessions+1)
     chapter_number = (total_sessions - 1) // 7 + 1
     session_number = f"{total_sessions:02}"
-    calendar_name = f"{days} more days from GO!"
+    calendar_name = f"{days_start} more days from GO!"
     # calendar_name = f"{chapter_number}.{session_number} - {date}"
     return calendar_name
 
@@ -2415,9 +2416,9 @@ async def init(ctx: commands.Context, *args: str):
         name = data[data['field_name'] == 'Name']['value'].iloc[0]
         init_bonus = data[data['field_name'] == 'Initiative']['value'].iloc[0]
         ac = data[data['field_name'] == 'AC']['value'].iloc[0]
-        fort = data[data['field_name'] == 'Fort']['value'].iloc[0]
-        ref = data[data['field_name'] == 'Reflex']['value'].iloc[0]
-        will = data[data['field_name'] == 'Will']['value'].iloc[0]
+        fort = data[data['field_name'] == 'FORT']['value'].iloc[0]
+        ref = data[data['field_name'] == 'REF']['value'].iloc[0]
+        will = data[data['field_name'] == 'WILL']['value'].iloc[0]
 
         if not all((name, init_bonus, ac, fort, ref, will)):
             await ctx.send(
