@@ -2588,8 +2588,8 @@ async def init(ctx: commands.Context, *args: str):
         combatant_name = current[0]
         initiative, ac, fort, ref, will, author_id = current[1]
 
-        await ctx.send(f"Now it's {combatant_name}'s turn! (Initiative: {initiative})")
-        message = f"```Current initiative: <@" + str(author_id) + "> {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
+        await ctx.send(f"Now it's {combatant_name}'s turn! (Initiative: {initiative}) <@" + str(author_id) + ">")
+        message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
         message += "===============================\n"
         for combatant in sorted_init:
             name, stats = combatant
