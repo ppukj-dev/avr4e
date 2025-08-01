@@ -2535,7 +2535,7 @@ async def init(ctx: commands.Context, *args: str):
             message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
             message += "===============================\n"
             for name, stats in sorted_init:
-                initiative, ac, fort, ref, will = stats
+                initiative, ac, fort, ref, will, author_id = stats
                 message += f"{name}: {initiative} (AC: {ac}, Fort: {fort}, Ref: {ref}, Will: {will}\n"
             message += "```"
             message_id = bot.init_lists[channel_id]["message_id"]
