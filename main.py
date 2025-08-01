@@ -2531,6 +2531,7 @@ async def init(ctx: commands.Context, *args: str):
                 current_data[5]
             ]
             await ctx.send(f"Updated {matched_name}'s initiative to {target_initiative}")
+            print(f"Args received: {args}")
             sorted_init = sorted(bot.init_lists[channel_id]["combatants"].items(), key=lambda x: x[1][0], reverse=True)
             message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
             message += "===============================\n"
