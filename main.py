@@ -2536,7 +2536,7 @@ async def init(ctx: commands.Context, *args: str):
             message += "===============================\n"
             for name, stats in sorted_init:
                 initiative, ac, fort, ref, will = stats
-                message += f"{name}: {initiative} (AC: {ac}, Fort: {fort}, Ref: {ref}, Will: {will}, author id: {author_id})\n"
+                message += f"{name}: {initiative} (AC: {ac}, Fort: {fort}, Ref: {ref}, Will: {will}\n"
             message += "```"
             message_id = bot.init_lists[channel_id]["message_id"]
             try:
@@ -2546,7 +2546,7 @@ async def init(ctx: commands.Context, *args: str):
                 sent_message = await ctx.send(message)
                 bot.init_lists[channel_id]["message_id"] = sent_message.id
         except ValueError:
-            await ctx.send("Initiative must be a number. Ex:")
+            await ctx.send("Initiative must be a number.")
 
     elif args[0] == "end":
         confirm_view = discord.ui.View()
