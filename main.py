@@ -2518,7 +2518,7 @@ async def init(ctx: commands.Context, *args: str):
                 await ctx.send(f"No combatant matching '{partial_name}' found in the initiative tracker.")
                 return
             current_data = bot.init_lists[channel_id]["combatants"][matched_name]
-            if not isinstance(current_data, list) or len(current_data) != 5:
+            if not isinstance(current_data, list) or len(current_data) != 6:
                 await ctx.send(f"Corrupted data for {matched_name}, unable to update.")
                 return
             bot.init_lists[channel_id]["combatants"][matched_name] = [
