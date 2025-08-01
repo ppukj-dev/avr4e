@@ -2415,10 +2415,10 @@ async def init(ctx: commands.Context, *args: str):
         data = pd.read_json(io.StringIO(character[2]))
         name = data[data['field_name'] == 'Name']['value'].iloc[0]
         init_bonus = data[data['field_name'] == 'Initiative']['value'].iloc[0]
-        ac = data[data['field_name'] == 'AC']['value'].iloc[0]
-        fort = data[data['field_name'] == 'FORT']['value'].iloc[0]
-        ref = data[data['field_name'] == 'REF']['value'].iloc[0]
-        will = data[data['field_name'] == 'WILL']['value'].iloc[0]
+        ac = data[data['field_name'] == '`AC`']['value'].iloc[0]
+        fort = data[data['field_name'] == '`FORT`']['value'].iloc[0]
+        ref = data[data['field_name'] == '`REF`']['value'].iloc[0]
+        will = data[data['field_name'] == '`WILL`']['value'].iloc[0]
 
         if not all((name, init_bonus, ac, fort, ref, will)):
             await ctx.send(
