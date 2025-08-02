@@ -2454,7 +2454,6 @@ async def init(ctx: commands.Context, *args: str):
                 "Usage: \n!i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]\n!i add <combatant name> <initiative modifier> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
             return
         try:
-            initiative = int(args[3])
             name = args[1]
 
             # Default values
@@ -2465,7 +2464,7 @@ async def init(ctx: commands.Context, *args: str):
             author_id = ctx.author.id
 
             if args[2] != "-p":
-                initiative = d20.roll(f"1d20+{int(args[2])}")
+                initiative = d20.roll(f"1d20+{args[2]}")
             i = 3
             while i < len(args):
                 if args[i] == "-p" and i + 1 < len(args):
