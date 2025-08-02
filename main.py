@@ -2449,9 +2449,9 @@ async def init(ctx: commands.Context, *args: str):
             await ctx.send(f"Error when rolling initiative: {str(e)}")
 
     elif args[0] == "add":
-        if len(args) < 4 or args[2] != "-p":
+        if len(args) < 3:
             await ctx.send(
-                "Usage: !i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
+                "Usage: \n!i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]\n!i add <combatant name> <initiative modifier> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
             return
         try:
             initiative = int(args[3])
@@ -2464,9 +2464,14 @@ async def init(ctx: commands.Context, *args: str):
             will = "n/a"
             author_id = ctx.author.id
 
-            i = 4
+            if args[2] != "-p":
+                initiative = d20.roll(f"1d20+{int(args[2])}")
+            i = 3
             while i < len(args):
-                if args[i] == "-ac" and i + 1 < len(args):
+                if args[i] == "-p" and i + 1 < len(args):
+                    initiative = int(args[i + 1])
+                    i += 2
+                elif args[i] == "-ac" and i + 1 < len(args):
                     ac = int(args[i + 1])
                     i += 2
                 elif args[i] == "-fort" and i + 1 < len(args):
