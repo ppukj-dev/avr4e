@@ -2468,6 +2468,8 @@ async def init(ctx: commands.Context, *args: str):
                     initiative = d20.roll(f"1d20+{args[2]}").total
                 else:
                     initiative = d20.roll(f"1d20").total
+            
+            i = 2
 
             while i < len(args):
                 if args[i] == "-p" and i + 1 < len(args):
