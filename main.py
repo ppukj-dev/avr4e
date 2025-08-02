@@ -2486,7 +2486,7 @@ async def init(ctx: commands.Context, *args: str):
                     i += 1
 
             if not initiative:
-                initiative = 0
+                initiative = d20.roll(f"1d20").total
     
             bot.init_lists[channel_id]["combatants"][name] = [initiative, ac, fort, ref, will, author_id]
             await ctx.send(f"Added {name} with initiative {initiative}")
