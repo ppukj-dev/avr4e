@@ -2464,8 +2464,11 @@ async def init(ctx: commands.Context, *args: str):
             author_id = ctx.author.id
 
             if args[2] != "-p":
-                initiative = d20.roll(f"1d20+{args[2]}").total
-            i = 2
+                if args[2].replace('-','').replace('+', '').isdigit():
+                    initiative = d20.roll(f"1d20+{args[2]}").total
+                else:
+                    initiative = d20.roll(f"1d20").total
+
             while i < len(args):
                 if args[i] == "-p" and i + 1 < len(args):
                     initiative = int(args[i + 1])
