@@ -2596,7 +2596,7 @@ async def init(ctx: commands.Context, *args: str):
             if bot.init_lists[channel_id]["current_turn"] < len(sorted_init):
                 next_combatant = sorted_init[bot.init_lists[channel_id]["current_turn"] + 1]
             else: 
-                next_combatant = sorted_init[bot.init_lists[channel_id][0]]
+                next_combatant = sorted_init[0]
             next_name = next_combatant[0]
             next_init, _, _, _, _, next_author_id = next_combatant[1]
             await ctx.send(f"Next in line is {next_name}'s turn! (Initiative: {next_init}) <@" + str(next_author_id) + ">")
