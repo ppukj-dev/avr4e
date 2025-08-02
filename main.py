@@ -2451,7 +2451,7 @@ async def init(ctx: commands.Context, *args: str):
     elif args[0] == "add":
         if len(args) < 3:
             await ctx.send(
-                "Usage: \n!i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]\n!i add <combatant name> <initiative modifier> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
+                "Usage: \n • !i add <combatant name> -p <target initiative> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]\n • !i add <combatant name> <initiative modifier> [-ac <AC>] [-fort <Fort>] [-ref <Ref>] [-will <Will>]")
             return
         try:
             name = args[1]
@@ -2485,6 +2485,9 @@ async def init(ctx: commands.Context, *args: str):
                 else:
                     i += 1
 
+            if not initiative:
+                initiative = 0
+    
             bot.init_lists[channel_id]["combatants"][name] = [initiative, ac, fort, ref, will, author_id]
             await ctx.send(f"Added {name} with initiative {initiative}")
 
