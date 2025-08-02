@@ -2591,6 +2591,18 @@ async def init(ctx: commands.Context, *args: str):
         initiative, ac, fort, ref, will, author_id = current[1]
 
         await ctx.send(f"Now it's {combatant_name}'s turn! (Initiative: {initiative}) <@" + str(author_id) + ">")
+
+        try:
+            if bot.init_lists[channel_id]["current_turn"] < len(sorted_init):
+                next_combatant = bot.init_lists[channel_id]["current_turn"] + 1
+            else: 
+                next_combatant = bot.init_lists[channel_id][0]
+            next_name = next_combatant[0]
+            next_init, _, _, _, _, next_author_id = next_combatant[1]
+            await ctx.send(f"Now it's {next_name}'s turn! (Initiative: {next_init}) <@" + str(next_author_id) + ">")
+        except Exception as e:
+            ctx.send(e)
+        
         message = f"```Current initiative: {bot.init_lists[channel_id]['current_turn']} (round {bot.init_lists[channel_id]['round']})\n"
         message += "===============================\n"
         for combatant in sorted_init:
