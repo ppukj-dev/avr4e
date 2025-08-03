@@ -1327,7 +1327,7 @@ async def update_ds(guild_id: int):
     return
 
 
-@tasks.loop(time=times)
+@bot.command()
 async def daily_task_run():
     await update_calendar()
     # await update_ds(1343085306571915276)
@@ -2698,3 +2698,4 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     main()
+
