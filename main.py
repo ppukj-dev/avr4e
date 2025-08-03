@@ -1328,8 +1328,8 @@ async def update_ds(guild_id: int):
 
 
 @bot.command()
-async def daily_task_run():
-    await update_calendar(ctx: commands.Context)
+async def daily_task_run(ctx: commands.Context):
+    await update_calendar()
     # await update_ds(1343085306571915276)
     bot_dump_channel = bot.get_channel(1395988000474660935)
     await bot_dump_channel.send(
@@ -2698,5 +2698,6 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     main()
+
 
 
