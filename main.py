@@ -255,7 +255,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
-    # daily_task_run.start()
+    daily_task_run.start()
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands")
@@ -1327,8 +1327,8 @@ async def update_ds(guild_id: int):
     return
 
 
-@bot.command()
-async def daily_task_run(ctx: commands.Context):
+@tasks.loop(time=times)
+async def daily_task_run():
     await update_calendar()
     # await update_ds(1343085306571915276)
     bot_dump_channel = bot.get_channel(1395988000474660935)
@@ -2698,6 +2698,7 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     main()
+
 
 
 
