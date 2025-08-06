@@ -35,6 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from typing import List
 from PIL import Image, ImageOps, ImageDraw
+from mediawiki import MediaWiki
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -64,6 +65,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+wiki = MediaWiki(url='https://powerlisting.fandom.com/api.php')
+wiki.user_agent = 'avr4e-powerscraper'
 
 @app.on_event("startup")
 async def startup_event():
@@ -2632,6 +2635,11 @@ async def init(ctx: commands.Context, *args: str):
     else:
         await ctx.send(f"Unrecognized subcommand: {args[0]}. Type `!help` for assistance.")
 
+#@bot.command(alias=['sp'])
+#async def superpower(ctx: commands.Context):
+    #powerpage = 0
+    #wiki.random(pages=powerpage)
+    
 
 @bot.command(aliases=["cbload"])
 async def cb_generate(ctx: commands.Context):
@@ -2698,6 +2706,7 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     main()
+
 
 
 
