@@ -2661,7 +2661,7 @@ async def superpower(ctx: commands.Context):
                 image_url = random.choice(valid_images)
 
         # Extract raw wikitext content
-        raw_text = page.content
+        raw_text = page.wikitext
 
         # Extract the "==Capabilities==" section using regex
         match = re.search(r'==\s*Capabilities\s*==\n(.*?)(?=\n==)', raw_text, re.DOTALL | re.IGNORECASE)
@@ -2727,6 +2727,7 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     main()
+
 
 
 
