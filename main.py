@@ -2635,33 +2635,37 @@ async def init(ctx: commands.Context, *args: str):
     else:
         await ctx.send(f"Unrecognized subcommand: {args[0]}. Type `!help` for assistance.")
 
-@bot.command(alias=['sp'])
+@bot.command(aliases=['sp'])
 async def superpower(ctx: commands.Context):
-    title = wiki.random(pages=1)
-    # grab random page from the powerlisting wiki
-    
-    # create embed in discord with title, summary and image taken from the random page
-    p = wiki.page(title)
-    power_name = p.title
-    summary = p.summary
+    try:
+        title = wiki.random(pages=1)
+        page = wiki.page(title)
 
-    image_url = None
+        power_title = page.title
+        summary = page.summary
+
+        image_url = None
         if page.images:
             valid_images = [img for img in page.images if img.lower().endswith(('.jpg', '.jpeg', '.png', '.gif'))]
             if valid_images:
                 image_url = random.choice(valid_images)
 
-    embed = discord.Embed(
+        print(summary)
+        print(image_url)
+
+        # Create the embed
+        embed = discord.Embed(
             title=power_title,
             description=summary if len(summary) < 2048 else summary[:2045] + '...',
             color=discord.Color.purple()
         )
-        embed.url = page.url  # Set a clickable URL to the full page
+        embed.url = page.url
 
         if image_url:
             embed.set_image(url=image_url)
 
         await ctx.send(embed=embed)
+
     except Exception as e:
         await ctx.send(f"An error occurred while fetching the superpower: {e}")
     
@@ -2731,6 +2735,7 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     main()
+
 
 
 
