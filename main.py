@@ -2638,28 +2638,49 @@ async def init(ctx: commands.Context, *args: str):
 @bot.command(aliases=['sp'])
 async def superpower(ctx: commands.Context):
     try:
+        # Get a random page title
         title = wiki.random(pages=1)
+
+        # Retrieve the page by title
         page = wiki.page(title)
 
+        # Get title and URL
         power_title = page.title
-        summary = page.summary
+        power_url = page.url
 
+        # Try to extract a suitable image from the list
         image_url = None
         if page.images:
-            valid_images = [img for img in page.images if img.lower().endswith(('.jpg', '.jpeg', '.png', '.gif'))]
+            valid_images = [
+                img for img in page.images
+                if any(img.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif'])
+                and 'logo' not in img.lower()
+                and 'icon' not in img.lower()
+            ]
             if valid_images:
                 image_url = random.choice(valid_images)
 
-        print(summary)
-        print(image_url)
+        # Extract raw wikitext content
+        raw_text = page.content
 
-        # Create the embed
+        # Extract the "==Capabilities==" section using regex
+        match = re.search(r'==\s*Capabilities\s*==\n(.*?)(?=\n==)', raw_text, re.DOTALL | re.IGNORECASE)
+        capabilities = match.group(1).strip() if match else "No capabilities section found."
+
+        # Clean wiki markup (very basic)
+        capabilities_cleaned = re.sub(r'\[\[(?:[^|\]]*\|)?([^\]]+)\]\]', r'\1', capabilities)  # Replace links
+        capabilities_cleaned = re.sub(r"'''(.*?)'''", r'\1', capabilities_cleaned)  # Bold
+        capabilities_cleaned = re.sub(r"''(.*?)''", r'\1', capabilities_cleaned)    # Italic
+        capabilities_cleaned = re.sub(r'{{[^}]+}}', '', capabilities_cleaned)       # Remove templates
+        capabilities_cleaned = re.sub(r'<.*?>', '', capabilities_cleaned)           # Remove HTML tags
+
+        # Discord Embed
         embed = discord.Embed(
             title=power_title,
-            description=summary if len(summary) < 2048 else summary[:2045] + '...',
+            url=power_url,
+            description=f"**Capabilities:**\n{capabilities_cleaned[:2045] + '...' if len(capabilities_cleaned) > 2048 else capabilities_cleaned}",
             color=discord.Color.purple()
         )
-        embed.url = page.url
 
         if image_url:
             embed.set_image(url=image_url)
@@ -2667,36 +2688,7 @@ async def superpower(ctx: commands.Context):
         await ctx.send(embed=embed)
 
     except Exception as e:
-        await ctx.send(f"An error occurred while fetching the superpower: {e}")
-    
-
-@bot.command(aliases=["cbload"])
-async def cb_generate(ctx: commands.Context):
-    attachment = (
-        ctx.message.attachments[0] if ctx.message.attachments else None
-    )
-    if attachment is None:
-        await ctx.send("Please provide a file.")
-        return
-    file = await attachment.read()
-    try:
-        await ctx.message.delete()
-        async with ctx.typing():
-            character = await read_character_file(file)
-            if character is None:
-                await ctx.send("Invalid character file.")
-                return
-            buffer = await character_to_excel(character)
-            buffer.seek(0)
-            await ctx.send(
-                content=(
-                    f"`{character.characterName}` sheet is generated."
-                ),
-                file=discord.File(buffer, filename="character.xlsx")
-            )
-    except Exception as e:
-        print(e, traceback.format_exc())
-        await ctx.send("Error loading cbloader save file.")
+        await ctx.send(f"An error occurred while fetching the superpower: {str(e)}")
 
 
 async def handle_check_monster(
@@ -2735,6 +2727,7 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     main()
+
 
 
 
