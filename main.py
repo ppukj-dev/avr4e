@@ -1005,6 +1005,8 @@ def is_formatted_number(string: str):
 
 
 def draw_quota(max_usages: int, usages: int) -> str:
+    if max_usages >= 10:
+        return f"{usages}/{max_usages}"
     used = max_usages - usages
     if usages <= 0:
         return max_usages * "〇"
