@@ -2251,7 +2251,9 @@ async def beta(ctx: commands.Context, opponent: discord.Member):
     )
     choice_view = BetaChoice(
         ctx, ctx.author, opponent, 0,
-        event1=event1, event2=event2
+        event1=event1, event2=event2,
+        logger_callable=create_beta_log_df,
+        spreadsheet_id=get_spreadsheet_id(data[3])
     )
     content = (
         f"What is Beta-Test for both "

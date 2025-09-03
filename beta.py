@@ -10,7 +10,9 @@ class BetaChoice(View):
         player2: discord.Member,
         message_id: int,
         event1: str,
-        event2: str
+        event2: str,
+        spreadsheet_id: str,
+        logger_callable: callable
     ):
         super().__init__(timeout=None)
         self.ctx = ctx
@@ -20,6 +22,8 @@ class BetaChoice(View):
         self.event1 = event1
         self.event2 = event2
         self.choices = {}
+        self.spreadsheet_id = spreadsheet_id
+        self.logger_callable = logger_callable
 
     async def interaction_check(
             self, interaction: discord.Interaction) -> bool:
@@ -83,6 +87,17 @@ class BetaChoice(View):
         await msg.channel.send(
             content=f"{self.player1.mention} and {self.player2.mention}",
             embed=embed
+        )
+        self.logger_callable(
+            spreadsheet_id=self.spreadsheet_id,
+            channel_name=self.ctx.channel.name,
+            user_id=self.player1.id,
+            user_name=self.player1.name,
+            target_id=self.player2.id,
+            target_user_name=self.player2.name,
+            event1=self.event1,
+            event2=self.event2,
+            result=result_text
         )
         await msg.delete()
         self.stop()
