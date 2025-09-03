@@ -442,3 +442,64 @@ class MonstersUserMapRepository(Repository):
         with self as db:
             db.cursor.execute(query, (data, actions, id))
             db.connection.commit()
+
+
+class BetaEventMapRepository(Repository):
+    def __init__(self):
+        super().__init__()
+        self.connection = sqlite3.connect("database/avr4e.db")
+        self.cursor = self.connection.cursor()
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS beta_event_map (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            guild_id VARCHAR(255) NOT NULL,
+            items TEXT NOT NULL,
+            sheet_url TEXT NOT NULL,
+            UNIQUE (guild_id)
+        )""")
+        self.cursor.close()
+        self.connection.close()
+
+    def get_gacha(self, guild_id: str) -> tuple:
+        query = """
+        SELECT
+            id,
+            guild_id,
+            items,
+            sheet_url
+        FROM beta_event_map
+        WHERE guild_id = ?
+        LIMIT 1
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id,))
+            result = db.cursor.fetchone()
+
+        return result
+
+    def set_gacha(
+            self,
+            guild_id: str,
+            items: str,
+            sheet_url: str
+            ) -> None:
+        query = """
+        INSERT INTO beta_event_map (
+            guild_id, items, sheet_url
+        )
+        VALUES (
+            ?, ?, ?
+        )
+        ON CONFLICT (guild_id)
+            DO UPDATE SET
+                items = ?,
+                sheet_url = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (
+                guild_id,
+                items, sheet_url,
+                items, sheet_url))
+            db.connection.commit()

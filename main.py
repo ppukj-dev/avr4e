@@ -19,6 +19,7 @@ from repository import CharacterUserMapRepository, GachaMapRepository
 from repository import DowntimeMapRepository
 from repository import MonsterListRepository
 from repository import MonstersUserMapRepository
+from repository import BetaEventMapRepository
 from dnd_xml_parser import read_character_file, character_to_excel
 import constant
 from pagination import Paginator
@@ -29,6 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from typing import List
 from PIL import Image, ImageOps, ImageDraw
+from beta import BetaChoice
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -41,6 +43,7 @@ charaRepo = None
 gachaRepo = None
 downtimeRepo = None
 monsterRepo = None
+betaEventMapRepo = None
 
 
 app = FastAPI()
@@ -1125,7 +1128,6 @@ async def update_ds(guild_id: int):
             if sheet.title == "start":
                 temp_df = temp_df.sort_values(by="maxDice", ascending=True)
                 start = temp_df.to_dict()
-                print(start)
                 continue
             if sheet.title == "downtime":
                 temp_df = temp_df.applymap(
@@ -2221,10 +2223,125 @@ async def handle_check_monster(
     return create_check_result_embed(possible_check, choosen, name, ap)
 
 
+@bot.command(name="beta")
+async def beta(ctx: commands.Context, opponent: discord.Member):
+    if not opponent:
+        await ctx.send("Please mention an opponent.")
+        return
+    await ctx.message.delete()
+    if opponent.bot or ctx.author == opponent:
+        raise commands.BadArgument(
+            "You cannot play against a bot or yourself."
+        )
+
+    data = betaEventMapRepo.get_gacha(ctx.guild.id)
+    df_dict = json.loads(data[2])
+    sheet_df = pd.DataFrame(df_dict)
+    random_row = sheet_df.sample(n=min(2, len(sheet_df)))
+    event1 = random_row.iloc[0]['Event']
+    event2 = random_row.iloc[1]['Event']
+
+    description = f"🅰️ {event1}\n\n🅱️ {event2}"
+    description += "\n\n"
+    description += f"{ctx.author.mention}: ❓ vs {opponent.mention}: ❓"
+    embed = discord.Embed(
+        title="Shared Experience in Closed Beta",
+        description=description,
+        color=discord.Color.blurple()
+    )
+    choice_view = BetaChoice(
+        ctx, ctx.author, opponent, 0,
+        event1=event1, event2=event2
+    )
+    content = (
+        f"What is Beta-Test for both "
+        f"{ctx.author.mention} and {opponent.mention}?\n"
+    )
+    msg = await ctx.send(content=content, embed=embed, view=choice_view)
+    choice_view.message_id = msg.id
+
+
+@bot.command(aliases=["bs"])
+async def beta_sheet(ctx: commands.Context, url: str = ""):
+    try:
+        await ctx.message.delete()
+        if url == "":
+            await ctx.send("Please provide a url")
+            return
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        sheets = get_all_sheets(spreadsheet_id)
+        if len(sheets) == 0:
+            await ctx.send("No sheets found")
+            return
+        df_dict = {}
+        for sheet in sheets:
+            temp_df = get_df(spreadsheet_id, sheet.title)
+            temp_df = temp_df.replace('#REF!', None, )
+            temp_df = temp_df.dropna()
+            if sheet.title == "log":
+                continue
+            if sheet.title == "ClosedBetaGacha":
+                df_dict = temp_df.to_dict()
+        betaEventMapRepo.set_gacha(
+            guild_id=ctx.guild.id,
+            items=json.dumps(df_dict),
+            sheet_url=url
+        )
+        embed = discord.Embed()
+        embed.title = "Beta Event"
+        embed.description = "Beta Event Sheet is set."
+        await ctx.send(
+                content=f"New Beta Event [Spreadsheet]({url}) is added.",
+                embed=embed
+            )
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+    return
+
+
+def create_beta_log_df(
+            spreadsheet_id: str,
+            channel_name: str,
+            user_id: int,
+            user_name: str,
+            target_id: int,
+            target_user_name: str,
+            event1: str,
+            event2: str,
+            result: str,
+        ) -> bool:
+    try:
+        data = {
+            "Timestamp":
+                [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+            "InitiatorHandle": [user_name],
+            "InitiatorID": [str(user_id)],
+            "InitiatorPC": "",
+            "TargetHandle": [target_user_name],
+            "TargetID": [str(target_id)],
+            "TargetPC": "",
+            "ChannelName": [channel_name],
+            "Event Chosen 1": [event1],
+            "Event Chosen 2": [event2],
+            "Decision": [result]
+        }
+        log_df = pd.DataFrame(data=data)
+        log_result_to_sheet(spreadsheet_id, log_df)
+        return True
+    except Exception as e:
+        print(e, traceback.format_exc())
+        return False
+
+
 if __name__ == "__main__":
     charaRepo = CharacterUserMapRepository()
     gachaRepo = GachaMapRepository()
     downtimeRepo = DowntimeMapRepository()
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
+    betaEventMapRepo = BetaEventMapRepository()
     main()
