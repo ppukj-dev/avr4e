@@ -13,6 +13,7 @@ import io
 import requests
 import traceback
 from discord.ext import commands, tasks
+from discord.ui import View, Button
 from view import generator
 import datetime
 from repository import CharacterUserMapRepository, GachaMapRepository
@@ -1478,6 +1479,222 @@ async def downtime(ctx: commands.Context, *, args=None):
         except Exception as e:
             print(e)
             return
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
+
+@bot.command(aliases=["mdt"])
+async def multi_downtime(ctx: commands.Context, *, args=None):
+    try:
+        await ctx.message.delete()
+        data = downtimeRepo.get_gacha(ctx.guild.id)
+        if data is None:
+            await ctx.send("No downtime sheet is found.")
+            return
+
+        start = json.loads(data[2])
+        df_dict = json.loads(data[3])
+        url = data[4]
+        spreadsheet_id = get_spreadsheet_id(url)
+        sheet = get_sheet_to_roll(start)
+        if sheet == "":
+            await ctx.send("No sheet found.")
+            return
+        if sheet == "none":
+            await none_meet(ctx)
+            return
+
+        filter_by_user_id: str = None
+        filter_by_location: str = None
+        if args is not None:
+            if re.search(r'<@\d+>', args):
+                filter_by_user_id = args
+            else:
+                filter_by_location = args
+
+        sheet_dict = df_dict[sheet]
+        sheet_df = pd.DataFrame(sheet_dict)
+
+        if 'userID' in sheet_df.columns:
+            sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
+
+        if filter_by_user_id is not None:
+            sheet_df = sheet_df[sheet_df['userID'].str.contains(
+                filter_by_user_id, case=False
+            )]
+
+        if filter_by_location is not None:
+            sheet_df = sheet_df[
+                sheet_df['where'].isna() |
+                (sheet_df['where'] == '') |
+                sheet_df['where'].str.contains(
+                    filter_by_location, case=False, na=False)
+            ]
+            unique_location = sheet_df['where'].unique().tolist()
+            if len(unique_location) <= 1 and unique_location[0] == "":
+                await none_meet(ctx, filter_by_location)
+                return
+            filter_by_location = unique_location[0]
+
+        if sheet_df.empty:
+            await none_meet(ctx)
+            return
+
+        # pick 3 random rows
+        try:
+            choices_df = sheet_df.sample(n=min(2, len(sheet_df)))
+        except Exception as e:
+            print("error: ", e)
+            await none_meet(ctx)
+            return
+
+        # build temporary embeds for preview
+        embeds = []
+        choice_embed = discord.Embed(
+            title="Your Downtime Choices",
+            description="Choose one of the following options:"
+        )
+        for i, row in enumerate(choices_df.itertuples(), start=1):
+            char = getattr(row, 'char', 'no one')
+            location = getattr(
+                row,
+                'where',
+                filter_by_location or 'nowhere in particular'
+            ) or 'nowhere in particular'
+            event = getattr(row, 'event', 'No event described.')
+            image = getattr(row, 'image/gif embed', None)
+
+            embed = discord.Embed(
+                title=f"You meet with {char} at {location}!"
+            )
+            embed.description = (
+                f"{event}\n\n"
+                f"-# [*Want to add events of your character? Click this.*]"
+                f"({url})"
+            )
+            choice_embed.add_field(
+                name=f"{i}️⃣: Meet {char} at {location}",
+                value=event,
+                inline=False
+            )
+            if image:
+                embed.set_image(url=image)
+            embeds.append((embed, row))
+
+        # add a none option
+        choice_embed.add_field(
+            name="🚫: Meet No One",
+            value=(
+                "It is not that you don't meet anyone, "
+                "but you choose not to meet anyone."
+            ),
+            inline=False
+        )
+
+        class ChoiceView(View):
+            def __init__(self, embeds, rows):
+                super().__init__(timeout=None)
+                self.result = None
+                self.rows = rows
+                # "3️⃣"
+                emojis = ["1️⃣", "2️⃣"]
+                for idx in range(len(embeds)):
+                    btn = Button(
+                        label="",
+                        style=discord.ButtonStyle.primary,
+                        emoji=emojis[idx],
+                        custom_id=str(idx)
+                    )
+                    btn.callback = self.make_callback(idx)
+                    self.add_item(btn)
+
+                none_btn = Button(
+                    label="None",
+                    style=discord.ButtonStyle.danger,
+                    emoji="🚫",
+                    custom_id="none"
+                )
+                none_btn.callback = self.make_callback("none")
+                self.add_item(none_btn)
+
+            def make_callback(self, choice):
+                async def callback(interaction: discord.Interaction):
+                    if interaction.user.id != ctx.author.id:
+                        await interaction.response.send_message(
+                            "You can't choose for someone else!",
+                            ephemeral=True
+                        )
+                        return
+                    self.result = choice
+                    await interaction.response.defer()
+                    self.stop()
+                return callback
+
+            async def on_timeout(self):
+                if self.message:
+                    await self.message.edit(
+                        content="⏳ Selection timed out.", view=None
+                    )
+
+        view = ChoiceView([e for e, _ in embeds], [r for _, r in embeds])
+        preview_msg = await ctx.send(
+            content="Choose your downtime:",
+            embed=choice_embed, view=view
+        )
+        view.message = preview_msg
+
+        await view.wait()
+
+        # after choice
+        if view.result is None:
+            return
+
+        if view.result == "none":
+            await preview_msg.edit(
+                content="You chose to meet no one.",
+                embed=discord.Embed(
+                    title="You meet no one.",
+                    description=(
+                        "It is not that you don't meet anyone, "
+                        "but you choose not to meet anyone."
+                    )
+                ),
+                view=None
+            )
+            return
+
+        try:
+            idx = int(view.result)
+            chosen_embed, chosen_row = embeds[idx]
+            user_id = getattr(chosen_row, 'userID', None)
+
+            avatar_url = ctx.author.avatar.url if ctx.author.avatar else ""
+            chosen_embed.set_author(name=ctx.author.name, icon_url=avatar_url)
+            chosen_embed.set_footer(text=f"DT{get_calendar_name()}")
+
+            await preview_msg.delete()
+            await ctx.send(
+                content=user_id,
+                embeds=[chosen_embed],
+                view=None
+            )
+
+            try:
+                create_gacha_log_df(
+                    spreadsheet_id,
+                    ctx.channel.id,
+                    ctx.channel.name,
+                    ctx.author.id,
+                    ctx.author.name,
+                    getattr(chosen_row, 'char', 'no one'),
+                    getattr(chosen_row, 'event', 'No event described.')
+                )
+            except Exception as e:
+                print(e)
+        except Exception as e:
+            print(e)
+
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
