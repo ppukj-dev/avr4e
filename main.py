@@ -1201,32 +1201,37 @@ def main():
     pass
 
 
+def _looks_like_echo(ctx: commands.Context, m: discord.Message) -> bool:
+    content = m.content.strip()
+    starts_like_cmd = content.startswith(
+        f"{ctx.prefix}{ctx.command.qualified_name}"
+    )
+    is_proxyish = (m.author.bot) or (m.webhook_id is not None)
+    return m.channel.id == ctx.channel.id and starts_like_cmd and is_proxyish
+
+
+async def _cleanup_proxy_echo(bot: commands.Bot, ctx: commands.Context):
+    await asyncio.sleep(0.05)
+    try:
+        echo = await bot.wait_for(
+            "message",
+            timeout=0.6,
+            check=lambda m: _looks_like_echo(ctx, m))
+        try:
+            await echo.delete()
+        except discord.Forbidden:
+            pass
+    except asyncio.TimeoutError:
+        pass
+
+
 @bot.command()
 async def gacha(ctx: commands.Context):
     try:
+        asyncio.create_task(_cleanup_proxy_echo(bot, ctx))
         try:
             await ctx.message.delete()
         except Exception:
-            pass
-
-        def is_proxy_echo(m: discord.Message) -> bool:
-            return (
-                m.webhook_id is not None
-                and m.channel.id == ctx.channel.id
-                and m.content.strip().startswith(
-                    f"{ctx.prefix}{ctx.command.name}"
-                )
-                and m.created_at >= ctx.message.created_at
-            )
-        try:
-            echo = await bot.wait_for(
-                "message", timeout=2.0, check=is_proxy_echo
-            )
-            try:
-                await echo.delete()
-            except discord.Forbidden:
-                pass
-        except asyncio.TimeoutError:
             pass
 
         data = gachaRepo.get_gacha(ctx.guild.id)
