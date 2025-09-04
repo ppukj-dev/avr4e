@@ -1080,7 +1080,7 @@ times = [
 
 
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2025, 4, 25, 0, 0, 0, tzinfo=utc)
+    start_date = datetime.datetime(2025, 4, 9, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     delta = now - start_date
     total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
@@ -1204,7 +1204,31 @@ def main():
 @bot.command()
 async def gacha(ctx: commands.Context):
     try:
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except Exception:
+            pass
+
+        def is_proxy_echo(m: discord.Message) -> bool:
+            return (
+                m.webhook_id is not None
+                and m.channel.id == ctx.channel.id
+                and m.content.strip().startswith(
+                    f"{ctx.prefix}{ctx.command.name}"
+                )
+                and m.created_at >= ctx.message.created_at
+            )
+        try:
+            echo = await bot.wait_for(
+                "message", timeout=2.0, check=is_proxy_echo
+            )
+            try:
+                await echo.delete()
+            except discord.Forbidden:
+                pass
+        except asyncio.TimeoutError:
+            pass
+
         data = gachaRepo.get_gacha(ctx.guild.id)
         if data is None:
             await ctx.send("No gacha sheet is found.")
@@ -1233,6 +1257,13 @@ async def gacha(ctx: commands.Context):
             avatar_url = ctx.author.avatar.url
         embed.set_image(url=image)
         embed.set_author(name=ctx.author.name, icon_url=avatar_url)
+        # TODO: Hardcoded for now
+        if ctx.guild.id == 1396768475850211339:
+            current_channel = ctx.channel
+            channel_gacha = ctx.guild.get_channel(1409570843490783397)
+            content = f"{ctx.author.mention} in {current_channel.mention}"
+            await channel_gacha.send(content=content, embed=embed)
+
         await ctx.send(embed=embed)
         try:
             create_gacha_log_df(
@@ -1463,7 +1494,7 @@ async def downtime(ctx: commands.Context, *, args=None):
         embed.set_image(url=image)
         embed.set_author(name=ctx.author.name, icon_url=avatar_url)
         embed.set_footer(
-            text=f"DT{get_calendar_name()}"
+            text=f"DT {get_calendar_name()}"
         )
         await ctx.send(content=user_id, embed=embed)
         try:
