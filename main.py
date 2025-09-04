@@ -1268,8 +1268,8 @@ async def gacha(ctx: commands.Context):
             channel_gacha = ctx.guild.get_channel(1409570843490783397)
             content = f"{ctx.author.mention} in {current_channel.mention}"
             await channel_gacha.send(content=content, embed=embed)
-
-        await ctx.send(embed=embed)
+        else:
+            await ctx.send(embed=embed)
         try:
             create_gacha_log_df(
                 spreadsheet_id,
