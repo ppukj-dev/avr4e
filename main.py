@@ -173,7 +173,7 @@ def process_message(message: str) -> str:
 
 @bot.event
 async def on_ready():
-    # daily_task_run.start()
+    daily_task_run.start()
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands")
@@ -1080,11 +1080,11 @@ times = [
 
 
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2025, 4, 9, 0, 0, 0, tzinfo=utc)
+    start_date = datetime.datetime(2025, 9, 4, 0, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     delta = now - start_date
-    total_sessions = int(delta.total_seconds() // (60 * 60 * 24))
-    date = get_in_game_date(total_sessions+1)
+    total_sessions = 1 + int(delta.total_seconds() // (60 * 60 * 24))
+    date = get_in_game_date(total_sessions)
     chapter_number = (total_sessions - 1) // 7 + 1
     session_number = f"{total_sessions:02}"
     calendar_name = f"{chapter_number}.{session_number} - {date}"
@@ -1092,7 +1092,7 @@ def get_calendar_name() -> str:
 
 
 async def update_calendar():
-    channel_calendar = bot.get_channel(1343085306999734370)
+    channel_calendar = bot.get_channel(1396768477527937096)
     channel_name = f"📅 {get_calendar_name()}"
     print(channel_name)
     try:
@@ -1151,42 +1151,27 @@ async def update_ds(guild_id: int):
 @tasks.loop(time=times)
 async def daily_task_run():
     await update_calendar()
-    await update_ds(1343085306571915276)
-    bot_dump_channel = bot.get_channel(1343085307628617900)
+    bot_dump_channel = bot.get_channel(1396768477972271151)
+    try:
+        await update_ds(1396768475850211339)
+    except Exception:
+        await bot_dump_channel.send(
+            "Error updating downtime. Please check the downtime sheet."
+        )
     await bot_dump_channel.send(
         "Done updating calendar and downtime.")
 
 
 def get_in_game_date(week_number):
     months = [
-        "Primaris", "Sequora", "Trionyx", "Quadrael",
-        "Pentara", "Hexune", "Sephyros", "Octyra"
+        "Oktober", "November", "Desember", "Januari",
+        "Februari", "Maret", "April", "Mei",
+        "Juni", "Juli", "Agustus", "September"
     ]
 
-    month_weeks = []
-    for i in range(8):
-        if (i + 1) % 2 == 1:
-            month_weeks.append(3)
-        else:
-            month_weeks.append(4)
-
-    total_weeks_in_year = sum(month_weeks)
-    week_in_year = (week_number - 1) % total_weeks_in_year + 1
-
-    current_week = week_in_year
-    for month_index, weeks_in_month in enumerate(month_weeks):
-        if current_week <= weeks_in_month:
-            week_label = {
-                1: "1st Week",
-                2: "2nd Week",
-                3: "3rd Week",
-                4: "4th Week"
-            }[current_week]
-            return f"{months[month_index]} {week_label}"
-        else:
-            current_week -= weeks_in_month
-
-    raise ValueError("Invalid week number computation.")
+    month_index = (week_number - 1) // 4 % 12
+    week_label = f"Week {((week_number - 1) % 4) + 1}"
+    return f"{week_label} {months[month_index]}"
 
 
 def two_digit(number: int):
@@ -1707,7 +1692,7 @@ async def multi_downtime(ctx: commands.Context, *, args=None):
 
             avatar_url = ctx.author.avatar.url if ctx.author.avatar else ""
             chosen_embed.set_author(name=ctx.author.name, icon_url=avatar_url)
-            chosen_embed.set_footer(text=f"DT{get_calendar_name()}")
+            chosen_embed.set_footer(text=f"DT {get_calendar_name()}")
 
             await preview_msg.delete()
             await ctx.send(
