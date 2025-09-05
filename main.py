@@ -1211,11 +1211,11 @@ def _looks_like_echo(ctx: commands.Context, m: discord.Message) -> bool:
 
 
 async def _cleanup_proxy_echo(bot: commands.Bot, ctx: commands.Context):
-    await asyncio.sleep(0.05)
+    await asyncio.sleep(0.02)
     try:
         echo = await bot.wait_for(
             "message",
-            timeout=0.6,
+            timeout=1,
             check=lambda m: _looks_like_echo(ctx, m))
         try:
             await echo.delete()
