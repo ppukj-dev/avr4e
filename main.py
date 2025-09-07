@@ -1539,19 +1539,13 @@ async def multi_downtime(
             title="Your Downtime Choices",
             description="Choose one of the following options:"
         )
-        for i, row in enumerate(choices_df.itertuples(), start=1):
-            char = getattr(row, 'char', 'no one')
-            location = getattr(
-                row,
-                'where',
-                'nowhere in particular'
-            ) or 'nowhere in particular'
-            event = getattr(row, 'event', 'No event described.')
-            image = getattr(row, 'image/gif embed', None)
+        for i, (idx, row) in enumerate(choices_df.iterrows(), start=1):
+            char = (row.get('char') or 'no one')
+            location = (row.get('where') or 'nowhere in particular')
+            event = (row.get('event') or 'No event described.')
+            image = row.get('image/gif embed')
 
-            embed = discord.Embed(
-                title=f"You meet with {char} at {location}!"
-            )
+            embed = discord.Embed(title=f"You meet with {char} at {location}!")
             embed.description = (
                 f"{event}\n\n"
                 f"-# [*Want to add events of your character? Click this.*]"
@@ -1562,9 +1556,10 @@ async def multi_downtime(
                 value=event,
                 inline=False
             )
-            if image:
+            if isinstance(image, str) and image.strip():
                 embed.set_image(url=image)
-            embeds.append((embed, row))
+
+            embeds.append((embed, {"index": idx, **row.to_dict()}))
 
         # add a none option
         choice_embed.add_field(
