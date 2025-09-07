@@ -1393,7 +1393,10 @@ async def downtime_sheet(ctx: commands.Context, url: str = ""):
 @bot.command(aliases=["dt"])
 async def downtime(ctx: commands.Context, *, args=None):
     try:
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except Exception:
+            pass
         data = downtimeRepo.get_gacha(ctx.guild.id)
         if data is None:
             await ctx.send("No downtime sheet is found.")
@@ -1411,13 +1414,22 @@ async def downtime(ctx: commands.Context, *, args=None):
             return
         filter_by_user_id: str = None
         filter_by_location: str = None
-        if args is not None:
+
+        sheet_dict = df_dict[sheet]
+        sheet_df = pd.DataFrame(sheet_dict)
+        if args is None:
+            await multi_downtime(
+                ctx,
+                sheet_df,
+                url,
+                spreadsheet_id
+            )
+            return
+        else:
             if re.search(r'<@\d+>', args):
                 filter_by_user_id = args
             else:
                 filter_by_location = args
-        sheet_dict = df_dict[sheet]
-        sheet_df = pd.DataFrame(sheet_dict)
 
         # remove the userID of the person who called the command
         if 'userID' in sheet_df.columns:
@@ -1505,62 +1517,13 @@ async def downtime(ctx: commands.Context, *, args=None):
         await ctx.send("Error. Please check input again.")
 
 
-@bot.command(aliases=["mdt"])
-async def multi_downtime(ctx: commands.Context, *, args=None):
+async def multi_downtime(
+        ctx: commands.Context,
+        sheet_df: pd.DataFrame,
+        url: str,
+        spreadsheet_id
+):
     try:
-        await ctx.message.delete()
-        data = downtimeRepo.get_gacha(ctx.guild.id)
-        if data is None:
-            await ctx.send("No downtime sheet is found.")
-            return
-
-        start = json.loads(data[2])
-        df_dict = json.loads(data[3])
-        url = data[4]
-        spreadsheet_id = get_spreadsheet_id(url)
-        sheet = get_sheet_to_roll(start)
-        if sheet == "":
-            await ctx.send("No sheet found.")
-            return
-        if sheet == "none":
-            await none_meet(ctx)
-            return
-
-        filter_by_user_id: str = None
-        filter_by_location: str = None
-        if args is not None:
-            if re.search(r'<@\d+>', args):
-                filter_by_user_id = args
-            else:
-                filter_by_location = args
-
-        sheet_dict = df_dict[sheet]
-        sheet_df = pd.DataFrame(sheet_dict)
-
-        if 'userID' in sheet_df.columns:
-            sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
-
-        if filter_by_user_id is not None:
-            sheet_df = sheet_df[sheet_df['userID'].str.contains(
-                filter_by_user_id, case=False
-            )]
-
-        if filter_by_location is not None:
-            sheet_df = sheet_df[
-                sheet_df['where'].isna() |
-                (sheet_df['where'] == '') |
-                sheet_df['where'].str.contains(
-                    filter_by_location, case=False, na=False)
-            ]
-            unique_location = sheet_df['where'].unique().tolist()
-            if len(unique_location) <= 1 and unique_location[0] == "":
-                await none_meet(ctx, filter_by_location)
-                return
-            filter_by_location = unique_location[0]
-
-        if sheet_df.empty:
-            await none_meet(ctx)
-            return
 
         # pick 3 random rows
         try:
@@ -1581,7 +1544,7 @@ async def multi_downtime(ctx: commands.Context, *, args=None):
             location = getattr(
                 row,
                 'where',
-                filter_by_location or 'nowhere in particular'
+                'nowhere in particular'
             ) or 'nowhere in particular'
             event = getattr(row, 'event', 'No event described.')
             image = getattr(row, 'image/gif embed', None)
