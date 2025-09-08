@@ -1646,7 +1646,7 @@ async def multi_downtime(
         try:
             idx = int(view.result)
             chosen_embed, chosen_row = embeds[idx]
-            user_id = getattr(chosen_row, 'userID', None)
+            user_id = (chosen_row.get('char') or None)
 
             avatar_url = ctx.author.avatar.url if ctx.author.avatar else ""
             chosen_embed.set_author(name=ctx.author.name, icon_url=avatar_url)
