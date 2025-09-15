@@ -1426,6 +1426,11 @@ async def downtime(ctx: commands.Context, *, args=None):
 
         sheet_dict = df_dict[sheet]
         sheet_df = pd.DataFrame(sheet_dict)
+
+        # remove the userID of the person who called the command
+        if 'userID' in sheet_df.columns:
+            sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
+
         if args is None:
             await multi_downtime(
                 ctx,
@@ -1439,10 +1444,6 @@ async def downtime(ctx: commands.Context, *, args=None):
                 filter_by_user_id = args
             else:
                 filter_by_location = args
-
-        # remove the userID of the person who called the command
-        if 'userID' in sheet_df.columns:
-            sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
 
         if filter_by_user_id is not None:
             sheet_df = sheet_df[sheet_df['userID'].str.contains(
