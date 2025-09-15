@@ -1169,9 +1169,18 @@ def get_in_game_date(week_number):
         "Juni", "Juli", "Agustus", "September"
     ]
 
+    season_emojis = {
+        "Juni": "☀️", "Juli": "☀️", "Agustus": "☀️",
+        "September": "🍂", "Oktober": "🍂", "November": "🍂",
+        "Desember": "❄️", "Januari": "❄️", "Februari": "❄️",
+        "Maret": "🌸", "April": "🌸", "Mei": "🌸"
+    }
+
     month_index = (week_number - 1) // 4 % 12
     week_label = f"Week {((week_number - 1) % 4) + 1}"
-    return f"{week_label} {months[month_index]}"
+    month = months[month_index]
+    emoji = season_emojis.get(month, "")
+    return f"{week_label} {month} {emoji}"
 
 
 def two_digit(number: int):
