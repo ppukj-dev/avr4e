@@ -1628,7 +1628,7 @@ async def multi_downtime(
 
         view = ChoiceView([e for e, _ in embeds], [r for _, r in embeds])
         preview_msg = await ctx.send(
-            content="Choose your downtime:",
+            content=f"{ctx.author.mention} Choose your downtime:",
             embed=choice_embed, view=view
         )
         view.message = preview_msg
