@@ -1640,15 +1640,18 @@ async def multi_downtime(
             return
 
         if view.result == "none":
-            await preview_msg.edit(
-                content="You chose to meet no one.",
-                embed=discord.Embed(
+            avatar_url = ctx.author.avatar.url if ctx.author.avatar else ""
+            none_embed = discord.Embed(
                     title="You meet no one.",
                     description=(
                         "It is not that you don't meet anyone, "
                         "but you choose not to meet anyone."
                     )
-                ),
+                )
+            none_embed.set_author(name=ctx.author.name, icon_url=avatar_url)
+            await preview_msg.edit(
+                content="You chose to meet no one.",
+                embed=none_embed,
                 view=None
             )
             return
