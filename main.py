@@ -1080,8 +1080,10 @@ times = [
 
 
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2025, 9, 4, 1, 0, 0, tzinfo=utc)
+    start_date = datetime.datetime(2026, 1, 3, 1, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
+    if now < start_date:
+        now = start_date - datetime.timedelta(days=1)
     delta = now - start_date
     total_sessions = 1 + int(delta.total_seconds() // (60 * 60 * 24))
     date = get_in_game_date(total_sessions)
@@ -1092,7 +1094,7 @@ def get_calendar_name() -> str:
 
 
 async def update_calendar():
-    channel_calendar = bot.get_channel(1396768477527937096)
+    channel_calendar = bot.get_channel(1446506930976723095)
     channel_name = f"📅 {get_calendar_name()}"
     print(channel_name)
     try:
@@ -1151,9 +1153,9 @@ async def update_ds(guild_id: int):
 @tasks.loop(time=times)
 async def daily_task_run():
     await update_calendar()
-    bot_dump_channel = bot.get_channel(1396768477972271151)
+    bot_dump_channel = bot.get_channel(1443893527636348958)
     try:
-        await update_ds(1396768475850211339)
+        await update_ds(1443823337980563507)
     except Exception:
         await bot_dump_channel.send(
             "Error updating downtime. Please check the downtime sheet."
@@ -1164,19 +1166,19 @@ async def daily_task_run():
 
 def get_in_game_date(week_number):
     months = [
-        "Oktober", "November", "Desember", "Januari",
-        "Februari", "Maret", "April", "Mei",
-        "Juni", "Juli", "Agustus", "September"
+        "Uno", "Tweyen", "Threo", "Quatro",
+        "Fif", "Seox", "Siete", "Eachta",
+        "Niyon", "Tien"
     ]
 
     season_emojis = {
-        "Juni": "☀️", "Juli": "☀️", "Agustus": "☀️",
-        "September": "🍂", "Oktober": "🍂", "November": "🍂",
-        "Desember": "❄️", "Januari": "❄️", "Februari": "❄️",
-        "Maret": "🌸", "April": "🌸", "Mei": "🌸"
+        "Fif": "☀️", "Seox": "☀️",
+        "Siete": "🍂", "Echta": "🍂", "Niyon": "🍂",
+        "Tien": "❄️", "Uno": "❄️", "Tweyen": "❄️",
+        "Threo": "🌸", "Quatro": "🌸"
     }
 
-    month_index = (week_number - 1) // 4 % 12
+    month_index = (week_number - 1) // 4 % 10
     week_label = f"Week {((week_number - 1) % 4) + 1}"
     month = months[month_index]
     emoji = season_emojis.get(month, "")
