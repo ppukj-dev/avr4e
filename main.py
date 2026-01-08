@@ -1577,8 +1577,8 @@ async def multi_downtime(
         choice_embed.add_field(
             name="🚫: Meet No One",
             value=(
-                "It is not that you don't meet anyone, "
-                "but you choose not to meet anyone."
+                "Fate has decided that this time you continue your life "
+                "without encountering anyone else."
             ),
             inline=False
         )
@@ -1646,8 +1646,8 @@ async def multi_downtime(
             none_embed = discord.Embed(
                     title="You meet no one.",
                     description=(
-                        "It is not that you don't meet anyone, "
-                        "but you choose not to meet anyone."
+                        "Fate has decided that this time you continue your "
+                        "life without encountering anyone else."
                     )
                 )
             none_embed.set_author(name=ctx.author.name, icon_url=avatar_url)
