@@ -1087,7 +1087,7 @@ def get_calendar_name() -> str:
     delta = now - start_date
     total_sessions = 1 + int(delta.total_seconds() // (60 * 60 * 24))
     date = get_in_game_date(total_sessions)
-    chapter_number = max(total_sessions - 3, 0) // 7 + 1
+    chapter_number = max(total_sessions - 1, 0) // 7 + 1
     session_number = f"{total_sessions:02}"
     calendar_name = f"{chapter_number}.{session_number} - {date}"
     return calendar_name
