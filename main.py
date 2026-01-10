@@ -198,6 +198,7 @@ async def help(ctx):
     desc += "\n"
     desc += "### Actions\n"
     desc += "- List: `;;a`\n"
+    desc += "  - Filter (case-insensitive, partial): `;;a -l <type>`\n"
     desc += "- Do action: `;;a <action name>`\n"
     desc += "- Checks: `;;c <skill name>`\n"
     desc += "- Action & Check Modifiers:\n"
@@ -366,19 +367,33 @@ async def action(ctx: commands.Context, *, args=None):
         name = character[1]
         data = pd.read_json(io.StringIO(character[2]))
         actions = pd.read_json(io.StringIO(character[3]))
+
+        filter_type = None
         if args is None:
-            embeds = create_action_list_embed(name, actions)
+            filter_type = ""
+        else:
+            try:
+                parsed_args = shlex.split(args)
+            except ValueError:
+                parsed_args = args.split()
+            if parsed_args and parsed_args[0].lower() in ("-l", "-list"):
+                filter_type = " ".join(parsed_args[1:]).strip()
+            if filter_type is None:
+                args = translate_cvar(args, data)
+                embed = await handle_action(args, actions, ctx, data, sheet_id)
+                if embed is None:
+                    return
+                await ctx.send(embed=embed)
+                return
+
+        if filter_type is not None:
+            filter_type = filter_type or ""
+            embeds = create_action_list_embed(name, actions, filter_type)
             view = Paginator(ctx.author, embeds)
             if len(embeds) <= 1:
                 view = None
             await ctx.send(embed=embeds[0], view=view)
             return
-        else:
-            args = translate_cvar(args, data)
-            embed = await handle_action(args, actions, ctx, data, sheet_id)
-        if embed is None:
-            return
-        await ctx.send(embed=embed)
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again. " + str(e))
@@ -413,13 +428,28 @@ async def token(ctx: commands.Context, *, args=None):
         await ctx.send("Error. Please check input again.")
 
 
-def create_action_list_embed(name: str, df: pd.DataFrame):
+def create_action_list_embed(name: str, df: pd.DataFrame, filter_type=""):
     max_length_description = 2500
     field_dict = {}
     embeds = []
     description = ""
     # embed.title = f"{name}'s Actions"
     try:
+        if filter_type != "":
+            filter_value = filter_type.strip()
+            df = df[
+                df['Type1']
+                .fillna('')
+                .astype(str)
+                .str.contains(filter_value, case=False, regex=False)
+            ]
+            if df.empty:
+                embed = discord.Embed()
+                embed.title = f"{name}'s Actions"
+                embed.description = (
+                    f"No actions found for `{filter_type}`."
+                )
+                return [embed]
         for type1 in df['Type1'].unique().tolist():
             field_dict[type1] = ""
             for _, row in df[df['Type1'] == type1].iterrows():
