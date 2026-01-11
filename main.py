@@ -21,6 +21,7 @@ from repository import DowntimeMapRepository
 from repository import MonsterListRepository
 from repository import MonstersUserMapRepository
 from repository import BetaEventMapRepository
+from repository import InitiativeRepository
 from dnd_xml_parser import read_character_file, character_to_excel
 import constant
 from pagination import Paginator
@@ -32,6 +33,7 @@ from dotenv import load_dotenv
 from typing import List
 from PIL import Image, ImageOps, ImageDraw
 from beta import BetaChoice
+from services.initiative import register_initiative_commands
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -45,6 +47,8 @@ gachaRepo = None
 downtimeRepo = None
 monsterRepo = None
 betaEventMapRepo = None
+initRepo = None
+initiative_service = None
 
 
 app = FastAPI()
@@ -114,6 +118,8 @@ class ActionParam():
     usages: int = 1
     multiroll: int = 1
     level: int = 0
+    is_init: bool = False
+    name_override: str = ""
 
 
 @app.post("/roll")
@@ -191,32 +197,52 @@ async def ping(ctx):
 async def help(ctx):
     embed = discord.Embed()
     embed.title = "Avr4e Commands"
+    prefix = bot.command_prefix if isinstance(bot.command_prefix, str) else ";;"
     desc = ""
     desc += "## Commands List\n"
-    desc += "- Add to Discord: `;;add <link to sheet>`\n"
-    desc += "- Update: `;;update`\n"
+    desc += f"- Add to Discord: `{prefix}add <link to sheet>`\n"
+    desc += f"- Update: `{prefix}update`\n"
     desc += "\n"
     desc += "### Actions\n"
-    desc += "- List: `;;a`\n"
-    desc += "  - Filter (case-insensitive, partial): `;;a -l <type>`\n"
-    desc += "- Do action: `;;a <action name>`\n"
-    desc += "- Checks: `;;c <skill name>`\n"
+    desc += f"- List: `{prefix}a`\n"
+    desc += f"  - Filter (case-insensitive, partial): `{prefix}a -l <type>`\n"
+    desc += f"- Do action: `{prefix}a <action name>`\n"
+    desc += f"- Checks: `{prefix}c <skill name>`\n"
     desc += "- Action & Check Modifiers:\n"
-    desc += "  - Adv/Dis: `;;a <action> adv/dis` `;;c <skill> adv/dis`\n"
-    desc += "  - Situational Modifier: `;;a <action> -b <amount>` "
-    desc += "`;;c <skill> -b <amount>`\n"
-    desc += "  - Human Mode: `;;a <action> -h` `;;c <skill> -h`\n"
-    desc += "  - Multiroll X times: `;;a <action> -rr X` `;;c <skill> -rr X`\n"
-    desc += "  - Check Level DC: `;;c <skill> -l X`\n"
+    desc += f"  - Adv/Dis: `{prefix}a <action> adv/dis` `{prefix}c <skill> adv/dis`\n"
+    desc += f"  - Situational Modifier: `{prefix}a <action> -b <amount>` "
+    desc += f"`{prefix}c <skill> -b <amount>`\n"
+    desc += f"  - Human Mode: `{prefix}a <action> -h` `{prefix}c <skill> -h`\n"
+    desc += f"  - Multiroll X times: `{prefix}a <action> -rr X` `{prefix}c <skill> -rr X`\n"
+    desc += f"  - Check Level DC: `{prefix}c <skill> -l X`\n"
+    desc += f"  - Initiative via Check: `{prefix}c Initiative` or `{prefix}c <skill> -init`\n"
     desc += "  - Action Only:\n"
-    desc += "    - Situational Damage: `;;a <action> -d <amount>`\n"
-    desc += "    - Multi Target: `;;a <action> -t <target1> -t <target2>`\n"
-    desc += "    - Use X Power Point: `;;action <action_name> -u X`\n"
-    desc += "    - Autocrit: `;;a <action_name> crit`\n"
+    desc += f"    - Situational Damage: `{prefix}a <action> -d <amount>`\n"
+    desc += f"    - Multi Target: `{prefix}a <action> -t <target1> -t <target2>`\n"
+    desc += f"    - Use X Power Point: `{prefix}action <action_name> -u X`\n"
+    desc += f"    - Autocrit: `{prefix}a <action_name> crit`\n"
+    desc += "\n"
+    desc += "### Initiative\n"
+    desc += f"- Begin tracker: `{prefix}i begin`\n"
+    desc += f"- Join with sheet: `{prefix}i join`\n"
+    desc += "  - Can also join using check roll for both monster and player."
+    desc += f"- Add manual: `{prefix}i add <name> <mod>` or `{prefix}i add <name> -p <value>`\n"
+    desc += f"- Edit combatant: `{prefix}i edit <name>`\n"
+    desc += f"- Next turn: `{prefix}i next`\n"
+    desc += f"- End tracker: `{prefix}i end`\n"
+    desc += f"- Monster check name override: `{prefix}mc <check> -name <name>`\n"
+    desc += "\n"
+    desc += "### Monsters\n"
+    desc += f"- Add monster sheet: `{prefix}madd <sheet url>`\n"
+    desc += f"- Update monster sheet: `{prefix}mupdate <sheet url>`\n"
+    desc += f"- View monster sheet: `{prefix}msheet <monster name>`\n"
+    desc += f"- Reset monster usages: `{prefix}mreset`\n"
+    desc += f"- Monster action: `{prefix}ma <action name>`\n"
+    desc += f"- Monster check: `{prefix}mc <check name>`\n"
     desc += "\n"
     desc += "**Taking Rest**\n"
-    desc += "- Short Rest: `;;reset sr`\n"
-    desc += "- Extended Rest: `;;reset`"
+    desc += f"- Short Rest: `{prefix}reset sr`\n"
+    desc += f"- Extended Rest: `{prefix}reset`"
     embed.description = desc
 
     await ctx.send(embed=embed)
@@ -540,7 +566,7 @@ def parse_command(message: str) -> ActionParam:
         "-b", "-d", "adv", "dis", "-adv", "-dis"
     ]
     general_args = [
-        "-h", "-crit", "-u", "crit", "-rr", "-l"
+        "-h", "-crit", "-u", "crit", "-rr", "-l", "-init", "-name"
     ]
     dict_of_args = {}
 
@@ -600,6 +626,12 @@ def parse_command(message: str) -> ActionParam:
             param.multiroll = int(splitted_message[value+1])
         elif key == "-l":
             param.level = int(splitted_message[value+1])
+        elif key == "-init":
+            param.is_init = True
+        elif key == "-name":
+            if value + 1 < len(splitted_message):
+                param.name_override = " ".join(
+                    splitted_message[value+1:value+2])
 
     for idx, target_string in enumerate(targets_string):
         target = parse_target_param(target_string)
@@ -821,9 +853,28 @@ async def check(ctx: commands.Context, *, args=None):
         # sheet_id = character[0]
         name = character[1]
         data = pd.read_json(io.StringIO(character[2]))
-        embed = await handle_check(args, data, ctx, name)
-        if embed is None:
+        result = await handle_check(args, data, ctx, name)
+        if result is None:
             return
+        embed, check_name, results, modifier_value, ap = result
+        if check_name.casefold() == "initiative":
+            ap.is_init = True
+        if ap.is_init and initiative_service:
+            def _stat_value(key: str):
+                value = initiative_service.find_field_value(data, key)
+                if value is None or pd.isna(value):
+                    return "?"
+                return value
+            stats = {
+                "ac": _stat_value("AC"),
+                "fort": _stat_value("FORT"),
+                "ref": _stat_value("REF"),
+                "will": _stat_value("WILL")
+            }
+            footer = await initiative_service.maybe_join_from_check(
+                ctx, name, results, modifier_value, source="player", stats=stats)
+            embed.set_footer(
+                text=footer or "No Initiative Tracker Set")
         await ctx.send(embed=embed)
     except Exception as e:
         print(e, traceback.format_exc())
@@ -843,7 +894,8 @@ def perform_check_roll(
     else:
         dice_expr = "1d20"
 
-    modifier = format_number(possible_check['value'].iloc[chosen])
+    base_modifier = int(possible_check['value'].iloc[chosen])
+    modifier = format_number(base_modifier)
     check_name = possible_check['field_name'].iloc[chosen]
 
     base_expr = f"{dice_expr}{modifier}{ap.d20_bonus}"
@@ -851,7 +903,8 @@ def perform_check_roll(
         base_expr = halve_flat_modifiers(base_expr)
 
     results = [d20.roll(base_expr) for _ in range(ap.multiroll)]
-    return str(check_name), results
+    total_modifier = base_modifier + parse_bonus_to_int(ap.d20_bonus)
+    return str(check_name), results, total_modifier
 
 
 def create_check_result_embed(
@@ -863,11 +916,12 @@ def create_check_result_embed(
 ):
     embed = discord.Embed()
     results = []
-    check_name, results = perform_check_roll(possible_check, choosen, ap)
+    check_name, results, total_modifier = perform_check_roll(
+        possible_check, choosen, ap)
     embed.title = f"{name} makes {check_name} check!"
     if len(results) <= 0:
         embed.description = "No such check found."
-        return embed
+        return embed, check_name, results, total_modifier
     if len(results) == 1:
         embed.description = f"{results[0]}"
     else:
@@ -876,7 +930,7 @@ def create_check_result_embed(
                 name=f"Check {i+1}",
                 value=results[i],
                 inline=True
-            )
+        )
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
     if ap.level > 0:
@@ -895,7 +949,7 @@ def create_check_result_embed(
         embed.set_footer(
             text=dc
         )
-    return embed
+    return embed, check_name, results, total_modifier
 
 
 async def handle_check(
@@ -923,7 +977,9 @@ async def handle_check(
             return None
     else:
         choosen = 0
-    return create_check_result_embed(possible_check, choosen, name, ap, level)
+    embed, check_name, results, total_modifier = create_check_result_embed(
+        possible_check, choosen, name, ap, level)
+    return embed, check_name, results, total_modifier, ap
 
 
 def parse_value(value) -> int:
@@ -1036,6 +1092,17 @@ def format_bonus(value: str) -> str:
 def is_formatted_number(string: str):
     pattern = r'^[+-]\d+$'
     return bool(re.match(pattern, string))
+
+
+def parse_bonus_to_int(value: str) -> int:
+    if not value:
+        return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
+
 
 
 def draw_quota(max_usages: int, usages: int) -> str:
@@ -2397,9 +2464,24 @@ async def monster_check(ctx: commands.Context, *, args=None):
             return
         character = monsterMapRepo.get_character(ctx.guild.id, ctx.author.id)
         data = pd.read_json(io.StringIO(character[2]))
-        embed = await handle_check_monster(args, data, ctx)
-        if embed is None:
+        result = await handle_check_monster(args, data, ctx)
+        if result is None:
             return
+        embed, check_name, results, modifier_value, ap, monster_name = result
+        if check_name.casefold() == "initiative":
+            ap.is_init = True
+        if ap.is_init and initiative_service:
+            base_name = ap.name_override or monster_name
+            footer = await initiative_service.maybe_join_from_check(
+                ctx,
+                base_name,
+                results,
+                modifier_value,
+                source="monster",
+                multi_name=True
+            )
+            embed.set_footer(
+                text=footer or "No Initiative Tracker Set")
         await ctx.send(embed=embed)
     except Exception as e:
         print(e, traceback.format_exc())
@@ -2440,8 +2522,8 @@ async def handle_check_monster(
         df: pd.DataFrame,
         ctx: commands.Context):
     ap = parse_command(command)
-    rollable_check = df[df['is_rollable'] == 'TRUE']
-    rollable_check['monster_field_name'] = (
+    rollable_check = df[df['is_rollable'] == 'TRUE'].copy()
+    rollable_check.loc[:, 'monster_field_name'] = (
         rollable_check['monster_name'] + ": " + rollable_check['field_name']
     )
     possible_check = rollable_check[
@@ -2461,7 +2543,9 @@ async def handle_check_monster(
     else:
         choosen = 0
     name = possible_check['monster_name'].iloc[choosen]
-    return create_check_result_embed(possible_check, choosen, name, ap)
+    embed, check_name, results, total_modifier = create_check_result_embed(
+        possible_check, choosen, name, ap)
+    return embed, check_name, results, total_modifier, ap, name
 
 
 @bot.command(name="beta")
@@ -2580,6 +2664,7 @@ def create_beta_log_df(
         return False
 
 
+
 if __name__ == "__main__":
     charaRepo = CharacterUserMapRepository()
     gachaRepo = GachaMapRepository()
@@ -2587,4 +2672,7 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     betaEventMapRepo = BetaEventMapRepository()
+    initRepo = InitiativeRepository()
+    initiative_service = register_initiative_commands(
+        bot, charaRepo, initRepo)
     main()

@@ -2,6 +2,7 @@ import os
 import sqlite3
 import mysql.connector
 import dotenv
+import datetime
 
 dotenv.load_dotenv()
 MYSQL_HOST = os.getenv("MYSQL_HOST")
@@ -503,3 +504,273 @@ class BetaEventMapRepository(Repository):
                 items, sheet_url,
                 items, sheet_url))
             db.connection.commit()
+
+
+class InitiativeRepository(Repository):
+    def __init__(self):
+        super().__init__()
+        self.connection = sqlite3.connect("database/avr4e.db")
+        self.cursor = self.connection.cursor()
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS initiative (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            guild_id VARCHAR(255) NOT NULL,
+            channel_id VARCHAR(255) NOT NULL,
+            current_turn INTEGER NOT NULL DEFAULT 0,
+            round INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 0,
+            started INTEGER NOT NULL DEFAULT 0,
+            pinned_message_id VARCHAR(255),
+            manual_order_override INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            UNIQUE (guild_id, channel_id)
+        )""")
+        try:
+            self.cursor.execute("""
+            ALTER TABLE initiative
+            ADD COLUMN manual_order_override INTEGER NOT NULL DEFAULT 0
+            """)
+        except sqlite3.OperationalError:
+            pass
+        self.cursor.execute("""
+        CREATE TABLE IF NOT EXISTS initiative_combatants (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            guild_id VARCHAR(255) NOT NULL,
+            channel_id VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            name_key VARCHAR(255) NOT NULL,
+            initiative INTEGER NOT NULL,
+            modifier INTEGER NOT NULL,
+            ac VARCHAR(255),
+            fort VARCHAR(255),
+            ref VARCHAR(255),
+            will VARCHAR(255),
+            author_id VARCHAR(255),
+            source VARCHAR(32) NOT NULL,
+            join_order INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (guild_id, channel_id, name_key)
+        )""")
+        self.cursor.close()
+        self.connection.close()
+
+    def get_state(self, guild_id: str, channel_id: str) -> tuple:
+        query = """
+        SELECT
+            id,
+            guild_id,
+            channel_id,
+            current_turn,
+            round,
+            active,
+            started,
+            pinned_message_id,
+            manual_order_override,
+            updated_at
+        FROM initiative
+        WHERE guild_id = ? AND channel_id = ?
+        LIMIT 1
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id, channel_id))
+            result = db.cursor.fetchone()
+
+        return result
+
+    def upsert_state(
+            self,
+            guild_id: str,
+            channel_id: str,
+            current_turn: int,
+            round: int,
+            active: int,
+            started: int,
+            pinned_message_id: str,
+            manual_order_override: int
+            ) -> None:
+        query = """
+        INSERT INTO initiative (
+            guild_id,
+            channel_id,
+            current_turn,
+            round,
+            active,
+            started,
+            pinned_message_id,
+            manual_order_override,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (guild_id, channel_id)
+            DO UPDATE SET
+                current_turn = ?,
+                round = ?,
+                active = ?,
+                started = ?,
+                pinned_message_id = ?,
+                manual_order_override = ?,
+                updated_at = ?
+        """
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self as db:
+            db.cursor.execute(query, (
+                guild_id, channel_id, current_turn, round,
+                active, started, pinned_message_id, manual_order_override, now,
+                current_turn, round, active, started, pinned_message_id,
+                manual_order_override, now))
+            db.connection.commit()
+
+    def list_combatants(self, guild_id: str, channel_id: str) -> list:
+        query = """
+        SELECT
+            name,
+            name_key,
+            initiative,
+            modifier,
+            ac,
+            fort,
+            ref,
+            will,
+            author_id,
+            source,
+            join_order,
+            created_at
+        FROM initiative_combatants
+        WHERE guild_id = ? AND channel_id = ?
+        ORDER BY join_order ASC
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id, channel_id))
+            result = db.cursor.fetchall()
+
+        return result
+
+    def get_combatant(
+            self,
+            guild_id: str,
+            channel_id: str,
+            name_key: str
+            ) -> tuple:
+        query = """
+        SELECT
+            name,
+            name_key,
+            initiative,
+            modifier,
+            ac,
+            fort,
+            ref,
+            will,
+            author_id,
+            source,
+            join_order,
+            created_at
+        FROM initiative_combatants
+        WHERE guild_id = ? AND channel_id = ? AND name_key = ?
+        LIMIT 1
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id, channel_id, name_key))
+            result = db.cursor.fetchone()
+
+        return result
+
+    def upsert_combatant(
+            self,
+            guild_id: str,
+            channel_id: str,
+            name: str,
+            name_key: str,
+            initiative: int,
+            modifier: int,
+            ac: str,
+            fort: str,
+            ref: str,
+            will: str,
+            author_id: str,
+            source: str,
+            join_order: int
+            ) -> None:
+        query = """
+        INSERT INTO initiative_combatants (
+            guild_id,
+            channel_id,
+            name,
+            name_key,
+            initiative,
+            modifier,
+            ac,
+            fort,
+            ref,
+            will,
+            author_id,
+            source,
+            join_order,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (guild_id, channel_id, name_key)
+            DO UPDATE SET
+                name = ?,
+                initiative = ?,
+                modifier = ?,
+                ac = ?,
+                fort = ?,
+                ref = ?,
+                will = ?,
+                author_id = ?,
+                source = ?,
+                join_order = ?
+        """
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self as db:
+            db.cursor.execute(query, (
+                guild_id, channel_id, name, name_key, initiative, modifier,
+                ac, fort, ref, will, author_id, source, join_order, now,
+                name, initiative, modifier, ac, fort, ref, will,
+                author_id, source, join_order))
+            db.connection.commit()
+
+    def delete_combatant(
+            self,
+            guild_id: str,
+            channel_id: str,
+            name_key: str
+            ) -> None:
+        query = """
+        DELETE FROM initiative_combatants
+        WHERE guild_id = ? AND channel_id = ? AND name_key = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id, channel_id, name_key))
+            db.connection.commit()
+
+    def delete_all_combatants(self, guild_id: str, channel_id: str) -> None:
+        query = """
+        DELETE FROM initiative_combatants
+        WHERE guild_id = ? AND channel_id = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id, channel_id))
+            db.connection.commit()
+
+    def get_next_join_order(self, guild_id: str, channel_id: str) -> int:
+        query = """
+        SELECT MAX(join_order)
+        FROM initiative_combatants
+        WHERE guild_id = ? AND channel_id = ?
+        """
+
+        with self as db:
+            db.cursor.execute(query, (guild_id, channel_id))
+            result = db.cursor.fetchone()
+        if result is None or result[0] is None:
+            return 1
+        return int(result[0]) + 1
