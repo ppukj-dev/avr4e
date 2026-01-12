@@ -256,6 +256,10 @@ class InitiativeService:
             f"Current initiative: {current_label}",
             "==============================="
         ]
+        max_init_width = max(
+            (len(str(data.get("initiative", 0))) for _, data in sorted_init),
+            default=1
+        )
         for name_key, combatant in sorted_init:
             prefix = "+" if combatant.get("source") == "player" else "-"
             display_name = combatant["name"]
@@ -264,9 +268,10 @@ class InitiativeService:
             fort = combatant.get("fort", "?")
             ref = combatant.get("ref", "?")
             will = combatant.get("will", "?")
+            initiative_score = str(combatant["initiative"]).rjust(max_init_width)
             core = (
-                f"{display_name}: {combatant['initiative']} "
-                f"({mod}) (AC{ac} F{fort} R{ref} W{will})"
+                f"{initiative_score} : {display_name} "
+                f"(AC{ac} F{fort} R{ref} W{will})"
             )
             if current_name_key == name_key:
                 lines.append(f"> {core}")
@@ -488,6 +493,10 @@ def register_initiative_commands(
                 service.clear_combatants(ctx)
                 message = service.render_message(state)
                 sent_message = await ctx.send(message)
+                await ctx.send(
+                    f"Initiative tracker started. Use {ctx.prefix}c init or "
+                    f"{ctx.prefix}c <skill> -init to join the initiative."
+                )
 
                 # Unpin any previously pinned initiative message
                 try:
@@ -967,7 +976,8 @@ def register_initiative_commands(
                 author_id = current[1]["author_id"]
 
                 message_lines = [
-                    f"## {combatant_name}'s TURN! <@{str(author_id)}>"
+                    f"**Initiative {initiative} (round {state['round']})**: {combatant_name} (<@{str(author_id)}>)",
+                    f"```md\n{combatant_name} <None>\n```"
                 ]
 
                 try:
@@ -978,9 +988,10 @@ def register_initiative_commands(
                     next_name = next_combatant[1]["name"]
                     next_init = next_combatant[1]["initiative"]
                     next_author_id = next_combatant[1]["author_id"]
-                    message_lines.append(
-                        f"-# {next_name}, get ready. <@{str(next_author_id)}>"
-                    )
+                    # message_lines.append(
+                    #     f"Next: **Initiative {next_init} (round {state['round']})**: {next_name} (<@{str(next_author_id)}>)"
+                    # )
+                    # message_lines.append(f"```md\n{next_name} <None>\n```")
                 except Exception as e:
                     await ctx.send(e)
 
@@ -1005,6 +1016,9 @@ def register_initiative_commands(
                     state["current_turn"] = 0
                     state["round"] = 1
                 else:
+                    if state["round"] <= 1 and state["current_turn"] <= 0:
+                        await ctx.send("Already at the first turn of round 1.")
+                        return
                     state["current_turn"] -= 1
                     if state["current_turn"] < 0:
                         state["current_turn"] = len(sorted_init) - 1
@@ -1016,7 +1030,8 @@ def register_initiative_commands(
                 author_id = current[1]["author_id"]
 
                 message_lines = [
-                    f"## Now it's {combatant_name}'s turn! (Initiative: {initiative}) <@" + str(author_id) + ">"
+                    f"**Initiative {initiative} (round {state['round']})**: {combatant_name} (<@{str(author_id)}>)",
+                    f"```md\n{combatant_name} <None>\n```"
                 ]
 
                 try:
@@ -1027,9 +1042,10 @@ def register_initiative_commands(
                     next_name = next_combatant[1]["name"]
                     next_init = next_combatant[1]["initiative"]
                     next_author_id = next_combatant[1]["author_id"]
-                    message_lines.append(
-                        f"Next in line is {next_name}'s turn! (Initiative: {next_init}) <@" + str(next_author_id) + ">"
-                    )
+                    # message_lines.append(
+                    #     f"Next: **Initiative {next_init} (round {state['round']})**: {next_name} (<@{str(next_author_id)}>)"
+                    # )
+                    # message_lines.append(f"```md\n{next_name} <None>\n```")
                 except Exception as e:
                     await ctx.send(e)
 
@@ -1039,7 +1055,7 @@ def register_initiative_commands(
                 await service.update_pinned_message(ctx, state, message)
                 service.save_state(ctx, state)
             else:
-                await ctx.send(f"Unrecognized subcommand: {args[0]}. Type `!help` for assistance.")
+                await ctx.send(f"Unrecognized subcommand: {args[0]}.")
 
         finally:
             try:
