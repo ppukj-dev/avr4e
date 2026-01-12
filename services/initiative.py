@@ -468,9 +468,17 @@ def register_initiative_commands(
                 if not state["active"]:
                     await ctx.send(f"Initiative tracking has not started. Use {ctx.prefix}i begin to start tracking initiative.")
                     return
+                pinned_id = state.get("pinned_message_id")
+                if pinned_id:
+                    try:
+                        message_obj = await ctx.channel.fetch_message(pinned_id)
+                        if message_obj.content:
+                            await ctx.send(message_obj.content)
+                            return
+                    except Exception:
+                        pass
                 message = service.render_message(state)
-                await service.update_pinned_message(ctx, state, message)
-                await ctx.send("Initiative updated. Check the pinned message.", delete_after=5)
+                await ctx.send(message)
                 return
 
             if args[0] == "begin":
@@ -952,6 +960,55 @@ def register_initiative_commands(
                     if state["current_turn"] >= len(sorted_init):
                         state["current_turn"] = 0
                         state["round"] += 1
+
+                current = sorted_init[state["current_turn"]]
+                combatant_name = current[1]["name"]
+                initiative = current[1]["initiative"]
+                author_id = current[1]["author_id"]
+
+                message_lines = [
+                    f"## {combatant_name}'s TURN! <@{str(author_id)}>"
+                ]
+
+                try:
+                    if state["current_turn"] < len(sorted_init) - 1:
+                        next_combatant = sorted_init[state["current_turn"] + 1]
+                    else:
+                        next_combatant = sorted_init[0]
+                    next_name = next_combatant[1]["name"]
+                    next_init = next_combatant[1]["initiative"]
+                    next_author_id = next_combatant[1]["author_id"]
+                    message_lines.append(
+                        f"-# {next_name}, get ready. <@{str(next_author_id)}>"
+                    )
+                except Exception as e:
+                    await ctx.send(e)
+
+                await ctx.send("\n".join(message_lines))
+
+                message = service.render_message(state)
+                await service.update_pinned_message(ctx, state, message)
+                service.save_state(ctx, state)
+            elif args[0] == "prev":
+                if not state["combatants"]:
+                    await ctx.send("No active combat.")
+                    return
+
+                sorted_init = sorted(
+                    state["combatants"].items(), key=service.sort_key(state))
+
+                if state["current_turn"] >= len(sorted_init):
+                    state["current_turn"] = 0
+
+                if not state.get("started", False):
+                    state["started"] = True
+                    state["current_turn"] = 0
+                    state["round"] = 1
+                else:
+                    state["current_turn"] -= 1
+                    if state["current_turn"] < 0:
+                        state["current_turn"] = len(sorted_init) - 1
+                        state["round"] = max(1, state["round"] - 1)
 
                 current = sorted_init[state["current_turn"]]
                 combatant_name = current[1]["name"]
