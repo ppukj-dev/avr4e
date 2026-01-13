@@ -2471,6 +2471,17 @@ async def monster_check(ctx: commands.Context, *, args=None):
         if check_name.casefold() == "initiative":
             ap.is_init = True
         if ap.is_init and initiative_service:
+            def _stat_value(key: str):
+                value = initiative_service.find_field_value(data, key)
+                if value is None or pd.isna(value):
+                    return "?"
+                return value
+            stats = {
+                "ac": _stat_value("AC"),
+                "fort": _stat_value("FORT"),
+                "ref": _stat_value("REF"),
+                "will": _stat_value("WILL")
+            }
             base_name = ap.name_override or monster_name
             footer = await initiative_service.maybe_join_from_check(
                 ctx,
@@ -2478,6 +2489,7 @@ async def monster_check(ctx: commands.Context, *, args=None):
                 results,
                 modifier_value,
                 source="monster",
+                stats=stats,
                 multi_name=True
             )
             embed.set_footer(
