@@ -450,8 +450,8 @@ def register_initiative_commands(
             await service.update_pinned_message(ctx, state, message)
             service.save_state(ctx, state)
             refreshed_text = (
-                f"Updated **{target_data['name']}** → Initiative: "
-                f"{target_data['initiative']}, AC: {target_data['ac']}, "
+                f"{ctx.author.mention} updated **{target_data['name']}** → "
+                f"Initiative: {target_data['initiative']}, AC: {target_data['ac']}, "
                 f"Fort: {target_data['fort']}, Ref: {target_data['ref']}, "
                 f"Will: {target_data['will']}"
             )
@@ -461,7 +461,11 @@ def register_initiative_commands(
         select.callback = on_select
         view = discord.ui.View()
         view.add_item(select)
-        await ctx.send("After which combatant?", view=view)
+        await ctx.send(
+            f"{ctx.author.mention} reordering **{combatants[target_key]['name']}**. "
+            "After which combatant?",
+            view=view
+        )
 
     @bot.command(aliases=["i", "initiative"])
     async def init(ctx: commands.Context, *args: str):
@@ -662,6 +666,9 @@ def register_initiative_commands(
                         "[-ref <Ref>] [-will <Will>]"
                     )
                     return
+                if state.get("pending_edit"):
+                    await ctx.send("An edit is already in progress. Please finish it first.")
+                    return
 
                 partial_name = args[1]
                 combatants = state["combatants"]
@@ -769,7 +776,8 @@ def register_initiative_commands(
                     source
                 )
                 updated_text = (
-                    f"Updated **{current_data['name']}** → Initiative: {initiative}, "
+                    f"{ctx.author.mention} updated **{current_data['name']}** → "
+                    f"Initiative: {initiative}, "
                     f"AC: {ac}, Fort: {fort}, Ref: {ref}, Will: {will}"
                 )
                 await prompt_reorder_position(
