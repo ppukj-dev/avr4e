@@ -406,7 +406,16 @@ async def action(ctx: commands.Context, *, args=None):
                 filter_type = " ".join(parsed_args[1:]).strip()
             if filter_type is None:
                 args = translate_cvar(args, data)
-                embed = await handle_action(args, actions, ctx, data, sheet_id)
+                ap = parse_command(args)
+                if ap.targets:
+                    for target in ap.targets:
+                        if not target.name or target.name in ("Meta",) or target.name.startswith("Attack "):
+                            continue
+                        resolved = await resolve_initiative_target(ctx, target.name)
+                        if resolved is None:
+                            return
+                        target.name = resolved
+                embed = await handle_action(args, actions, ctx, data, sheet_id, ap=ap)
                 if embed is None:
                     return
                 await ctx.send(embed=embed)
@@ -522,8 +531,10 @@ async def handle_action(
         df: pd.DataFrame,
         ctx: commands.Context,
         data: pd.DataFrame,
-        sheet_id: str):
-    ap = parse_command(command)
+        sheet_id: str,
+        ap: ActionParam = None):
+    if ap is None:
+        ap = parse_command(command)
     possible_action = df[df['Name'].str.contains(
         ap.name,
         na=False,
@@ -757,6 +768,64 @@ async def get_user_choice(
         choosen = int(followup_message.content) - 1
         await option_message.delete()
         return choosen
+
+
+async def resolve_initiative_target(
+        ctx: commands.Context,
+        target_name: str):
+    if not initiative_service:
+        return target_name
+    state = initiative_service.load_state(ctx)
+    if not state.get("active"):
+        return target_name
+    matches = initiative_service.find_matching_combatants(
+        state["combatants"], target_name)
+    if not matches:
+        return target_name
+    if len(matches) == 1:
+        resolved_name = matches[0][1]
+        if resolved_name.casefold() != target_name.casefold():
+            await ctx.send(
+                f"Target resolved to **{resolved_name}**.",
+                delete_after=5
+            )
+        return resolved_name
+
+    limited_matches = matches[:10]
+    choices = "\n".join(
+        f"{i}. {name}" for i, (_, name) in enumerate(limited_matches, 1)
+    )
+    embed = discord.Embed(
+        title="Multiple matches found",
+        description="Which combatant are you targeting?\n" + choices,
+        color=discord.Color.red()
+    )
+    embed.set_footer(text="Reply with the number of the combatant you want to target.")
+    prompt_message = await ctx.send(embed=embed)
+
+    def check(m):
+        return (
+            m.author.id == ctx.author.id
+            and m.channel.id == ctx.channel.id
+            and m.content.isdigit()
+        )
+
+    try:
+        msg = await bot.wait_for("message", check=check, timeout=30.0)
+        index = int(msg.content) - 1
+        if index < 0 or index >= len(limited_matches):
+            await ctx.send("Invalid selection number. Targeting cancelled.")
+            await prompt_message.delete()
+            await msg.delete()
+            return None
+        selected_name = limited_matches[index][1]
+        await prompt_message.delete()
+        await msg.delete()
+        return selected_name
+    except asyncio.TimeoutError:
+        await ctx.send("No response received. Targeting cancelled.")
+        await prompt_message.delete()
+        return None
 
 
 def create_action_result_embed(
@@ -2402,7 +2471,16 @@ async def monster_action(ctx: commands.Context, *, args=None):
                 "Use ;;msheet to see available actions.")
             return
         args = translate_cvar(args, data)
-        embed = await handle_action_monster(args, actions, ctx, data, sheet_id)
+        ap = parse_command(args)
+        if ap.targets:
+            for target in ap.targets:
+                if not target.name or target.name in ("Meta",) or target.name.startswith("Attack "):
+                    continue
+                resolved = await resolve_initiative_target(ctx, target.name)
+                if resolved is None:
+                    return
+                target.name = resolved
+        embed = await handle_action_monster(args, actions, ctx, data, sheet_id, ap=ap)
         if embed is None:
             return
         await ctx.send(embed=embed)
@@ -2416,8 +2494,10 @@ async def handle_action_monster(
         df: pd.DataFrame,
         ctx: commands.Context,
         data: pd.DataFrame,
-        sheet_id: str):
-    ap = parse_command(command)
+        sheet_id: str,
+        ap: ActionParam = None):
+    if ap is None:
+        ap = parse_command(command)
     df['ActionName'] = df['MonsterName'] + ": " + df['Name']
     possible_action = df[df['Name'].str.contains(
         ap.name,
