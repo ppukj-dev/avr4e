@@ -144,8 +144,6 @@ class InitiativeService:
             str(ctx.guild.id), str(ctx.channel.id))
 
     def sort_key(self, state: dict):
-        manual_override = state.get("manual_order_override", False)
-
         def key_fn(item):
             _name_key, data = item
             initiative = int(data.get("initiative", 0))
@@ -153,8 +151,6 @@ class InitiativeService:
             source = data.get("source", "manual")
             priority = 1 if source == "player" else 0
             join_order = int(data.get("join_order", 0))
-            if manual_override:
-                return (join_order,)
             return (-initiative, -modifier, -priority, join_order)
 
         return key_fn
@@ -441,7 +437,6 @@ def register_initiative_commands(
                 combatants[key]["join_order"] = idx
                 service.save_combatant(ctx, key, combatants[key])
             state["next_join_order"] = len(new_order) + 1
-            state["manual_order_override"] = True
             message = service.render_message(state)
             await service.update_pinned_message(ctx, state, message)
             service.save_state(ctx, state)
