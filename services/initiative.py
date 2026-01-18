@@ -417,12 +417,7 @@ def register_initiative_commands(
             options=options
         )
 
-        async def on_select(interaction: discord.Interaction):
-            if interaction.user != ctx.author:
-                await interaction.response.send_message(
-                    "You cannot use this selection.", ephemeral=True)
-                return
-            selection = select.values[0]
+        async def apply_selection(selection: str):
             target_data = combatants[target_key]
             new_order = []
             if selection == "__begin__":
@@ -455,17 +450,60 @@ def register_initiative_commands(
                 f"Fort: {target_data['fort']}, Ref: {target_data['ref']}, "
                 f"Will: {target_data['will']}"
             )
+            return refreshed_text
+
+        async def on_select(interaction: discord.Interaction):
+            if interaction.user != ctx.author:
+                await interaction.response.send_message(
+                    "You cannot use this selection.", ephemeral=True)
+                return
+            selection = select.values[0]
+            refreshed_text = await apply_selection(selection)
             await interaction.response.edit_message(
                 content=refreshed_text, view=None, embed=None)
 
         select.callback = on_select
         view = discord.ui.View()
         view.add_item(select)
-        await ctx.send(
-            f"{ctx.author.mention} reordering **{combatants[target_key]['name']}**. "
-            "After which combatant?",
-            view=view
+
+        embed = discord.Embed(
+            title="Reorder Initiative",
+            description=(
+                f"{ctx.author.mention} reordering **{combatants[target_key]['name']}**.\n"
+                "Choose from the dropdown or reply with an initiative value."
+            ),
+            color=discord.Color.blue()
         )
+        embed.set_footer(text="Reply with a number to set initiative directly.")
+        prompt_message = await ctx.send(embed=embed, view=view)
+
+        def check(m):
+            return (
+                m.author.id == ctx.author.id
+                and m.channel.id == ctx.channel.id
+                and m.content.isdigit()
+            )
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=30.0)
+            new_initiative = int(msg.content)
+            target_data = combatants[target_key]
+            target_data["initiative"] = new_initiative
+            service.save_combatant(ctx, target_key, target_data)
+            message = service.render_message(state)
+            await service.update_pinned_message(ctx, state, message)
+            service.save_state(ctx, state)
+            refreshed_text = (
+                f"{ctx.author.mention} updated **{target_data['name']}** → "
+                f"Initiative: {target_data['initiative']}, AC: {target_data['ac']}, "
+                f"Fort: {target_data['fort']}, Ref: {target_data['ref']}, "
+                f"Will: {target_data['will']}"
+            )
+            await prompt_message.edit(content=refreshed_text, view=None, embed=None)
+            await msg.delete()
+        except asyncio.TimeoutError:
+            await ctx.send("No response received. Reorder cancelled.")
+            await prompt_message.delete()
 
     @bot.command(aliases=["i", "initiative"])
     async def init(ctx: commands.Context, *args: str):
@@ -780,9 +818,14 @@ def register_initiative_commands(
                     f"Initiative: {initiative}, "
                     f"AC: {ac}, Fort: {fort}, Ref: {ref}, Will: {will}"
                 )
-                await prompt_reorder_position(
-                    ctx, service, state, matched_key, updated_text
-                )
+                if any(val is not None for val in (
+                        flags["p"], flags["ac"], flags["fort"],
+                        flags["ref"], flags["will"])):
+                    await ctx.send(updated_text)
+                else:
+                    await prompt_reorder_position(
+                        ctx, service, state, matched_key, updated_text
+                    )
                 message = service.render_message(state)
                 await service.update_pinned_message(ctx, state, message)
                 service.save_state(ctx, state)
