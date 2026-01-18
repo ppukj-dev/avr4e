@@ -459,6 +459,8 @@ def register_initiative_commands(
                 return
             selection = select.values[0]
             refreshed_text = await apply_selection(selection)
+            if not number_task.done():
+                number_task.cancel()
             await interaction.response.edit_message(
                 content=refreshed_text, view=None, embed=None)
 
@@ -477,16 +479,24 @@ def register_initiative_commands(
         embed.set_footer(text="Reply with a number to set initiative directly.")
         prompt_message = await ctx.send(embed=embed, view=view)
 
-        def check(m):
-            return (
-                m.author.id == ctx.author.id
-                and m.channel.id == ctx.channel.id
-                and m.content.isdigit()
-            )
+        async def wait_for_number():
+            def check(m):
+                if m.author.id != ctx.author.id or m.channel.id != ctx.channel.id:
+                    return False
+                try:
+                    int(m.content.strip())
+                    return True
+                except ValueError:
+                    return False
+
+            msg = await bot.wait_for("message", check=check, timeout=30.0)
+            return msg
+
+        number_task = asyncio.create_task(wait_for_number())
 
         try:
-            msg = await bot.wait_for("message", check=check, timeout=30.0)
-            new_initiative = int(msg.content)
+            msg = await number_task
+            new_initiative = int(msg.content.strip())
             target_data = combatants[target_key]
             target_data["initiative"] = new_initiative
             service.save_combatant(ctx, target_key, target_data)
@@ -502,8 +512,10 @@ def register_initiative_commands(
             await prompt_message.edit(content=refreshed_text, view=None, embed=None)
             await msg.delete()
         except asyncio.TimeoutError:
-            await ctx.send("No response received. Reorder cancelled.")
-            await prompt_message.delete()
+            pass
+        finally:
+            if not number_task.done():
+                number_task.cancel()
 
     @bot.command(aliases=["i", "initiative"])
     async def init(ctx: commands.Context, *args: str):
