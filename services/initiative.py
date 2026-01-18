@@ -261,7 +261,8 @@ class InitiativeService:
             default=1
         )
         for name_key, combatant in sorted_init:
-            prefix = "+" if combatant.get("source") == "player" else "-"
+            source = combatant.get("source")
+            prefix = "+" if source in ("player", "ally") else "-"
             display_name = combatant["name"]
             mod = self.format_number(int(combatant.get("modifier", 0)))
             ac = combatant.get("ac", "?")
@@ -517,6 +518,56 @@ def register_initiative_commands(
             if not number_task.done():
                 number_task.cancel()
 
+    async def prompt_manual_add_alignment(
+            ctx: commands.Context,
+            service: InitiativeService,
+            state: dict,
+            combatant_data: dict
+            ) -> None:
+        name_key = service.normalize_name(combatant_data["name"])
+        view = discord.ui.View(timeout=15)
+        ally_button = discord.ui.Button(
+            label="Ally", style=discord.ButtonStyle.success)
+        enemy_button = discord.ui.Button(
+            label="Enemy", style=discord.ButtonStyle.danger)
+
+        async def apply_alignment(interaction: discord.Interaction, source: str):
+            if interaction.user != ctx.author:
+                await interaction.response.send_message(
+                    "You cannot use this selection.", ephemeral=True)
+                return
+            combatant = state["combatants"].get(name_key)
+            if not combatant:
+                await interaction.response.edit_message(
+                    content="Combatant not found.", view=None, embed=None)
+                return
+            combatant["source"] = source
+            state["combatants"][name_key] = combatant
+            service.save_combatant(ctx, name_key, combatant)
+            message = service.render_message(state)
+            await service.update_pinned_message(ctx, state, message)
+            service.save_state(ctx, state)
+            await interaction.response.edit_message(
+                content=f"Marked **{combatant['name']}** as {source}.",
+                view=None,
+                embed=None
+            )
+
+        async def ally_callback(interaction: discord.Interaction):
+            await apply_alignment(interaction, "ally")
+
+        async def enemy_callback(interaction: discord.Interaction):
+            await apply_alignment(interaction, "enemy")
+
+        ally_button.callback = ally_callback
+        enemy_button.callback = enemy_callback
+        view.add_item(ally_button)
+        view.add_item(enemy_button)
+        await ctx.send(
+            "Mark alignment for this combatant (default: enemy).",
+            view=view
+        )
+
     @bot.command(aliases=["i", "initiative"])
     async def init(ctx: commands.Context, *args: str):
         channel_id = ctx.channel.id
@@ -688,7 +739,7 @@ def register_initiative_commands(
                     if initiative is None:
                         initiative = d20.roll("1d20").total
 
-                    service.upsert_combatant_state(
+                    combatant_data = service.upsert_combatant_state(
                         ctx,
                         state,
                         name,
@@ -699,9 +750,12 @@ def register_initiative_commands(
                         ref,
                         will,
                         str(author_id),
-                        "manual"
+                        "enemy"
                     )
                     await ctx.send(f"Added {name} with initiative {initiative}")
+                    await prompt_manual_add_alignment(
+                        ctx, service, state, combatant_data
+                    )
                     message = service.render_message(state)
                     await service.update_pinned_message(ctx, state, message)
                     service.save_state(ctx, state)
