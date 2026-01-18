@@ -551,7 +551,7 @@ async def handle_action(
             return None
     else:
         choosen = 0
-    embed = create_action_result_embed(possible_action, choosen, name, ap)
+    embed = create_action_result_embed(possible_action, choosen, name, ap, ctx)
     max_usages = possible_action['MaxUsages'].iloc[choosen]
     usages = possible_action['Usages'].iloc[choosen]
     if max_usages > 0:
@@ -784,11 +784,6 @@ async def resolve_initiative_target(
         return target_name
     if len(matches) == 1:
         resolved_name = matches[0][1]
-        if resolved_name.casefold() != target_name.casefold():
-            await ctx.send(
-                f"Target resolved to **{resolved_name}**.",
-                delete_after=5
-            )
         return resolved_name
 
     limited_matches = matches[:10]
@@ -832,7 +827,8 @@ def create_action_result_embed(
         possible_action: pd.DataFrame,
         choosen: int,
         name: str,
-        ap: ActionParam):
+        ap: ActionParam,
+        ctx: commands.Context = None):
     embed = discord.Embed()
     action_name = possible_action['Name'].iloc[choosen]
     embed_description = ""
@@ -883,7 +879,22 @@ def create_action_result_embed(
             expression = to_hit + target.d20_bonus
             expression = expression_str(expression, ap.is_halved)
             hit_result = d20.roll(expression)
-            meta += f"**{hit_description}**: {hit_result}\n"
+            suffix = ""
+            if def_target and ctx:
+                defense_value = get_initiative_defense(
+                    ctx, target.name, def_target)
+                if defense_value is not None:
+                    kept_values = get_kept_d20_values(hit_result)
+                    if kept_values and 1 in kept_values:
+                        status = "**MISS** (natural 1)"
+                        suffix = f" ({status})"
+                    else:
+                        if defense_value == 0 or hit_result.total >= defense_value:
+                            status = "**HIT**"
+                        else:
+                            status = "**MISS**"
+                        suffix = f" ({status} vs {defense_value})"
+            meta += f"**{hit_description}**: {hit_result}{suffix}\n"
         if damage and not is_aoe(range):
             expression = damage + target.damage_bonus
             expression = expression_str(expression, ap.is_halved)
@@ -1062,6 +1073,61 @@ def parse_value(value) -> int:
             int(value)
     except Exception:
         return 0
+
+
+def parse_defense_value(value) -> int:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        match = re.search(r'\d+', value)
+        return int(match.group()) if match else None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def get_kept_d20_values(hit_result) -> list:
+    try:
+        text = str(hit_result)
+        match = re.search(r"\(([^)]*)\)", text)
+        if not match:
+            return []
+        inside = match.group(1)
+        inside = inside.replace("**", "")
+        dropped = set(int(x) for x in re.findall(r"~~(\d+)~~", inside))
+        nums = [int(x) for x in re.findall(r"\d+", inside)]
+        kept = [n for n in nums if n not in dropped]
+        return kept
+    except Exception:
+        return []
+
+
+def get_initiative_defense(
+        ctx: commands.Context,
+        target_name: str,
+        def_target: str):
+    if not initiative_service or not ctx:
+        return None
+    state = initiative_service.load_state(ctx)
+    if not state.get("active"):
+        return None
+    name_key = initiative_service.normalize_name(target_name)
+    combatant = state["combatants"].get(name_key)
+    if not combatant:
+        return None
+    def_key = def_target.casefold()
+    if "ac" in def_key:
+        return parse_defense_value(combatant.get("ac"))
+    if "fort" in def_key:
+        return parse_defense_value(combatant.get("fort"))
+    if "ref" in def_key:
+        return parse_defense_value(combatant.get("ref"))
+    if "will" in def_key:
+        return parse_defense_value(combatant.get("will"))
+    return None
 
 
 def get_spreadsheet_id(url: str):
@@ -2514,7 +2580,7 @@ async def handle_action_monster(
     else:
         choosen = 0
     name = possible_action['MonsterName'].iloc[choosen]
-    embed = create_action_result_embed(possible_action, choosen, name, ap)
+    embed = create_action_result_embed(possible_action, choosen, name, ap, ctx)
     max_usages = possible_action['MaxUsages'].iloc[choosen]
     usages = possible_action['Usages'].iloc[choosen]
     if max_usages > 0:
