@@ -2617,8 +2617,9 @@ async def monster_check(ctx: commands.Context, *, args=None):
         if check_name.casefold() == "initiative":
             ap.is_init = True
         if ap.is_init and initiative_service:
+            monster_df = data[data['monster_name'] == monster_name]
             def _stat_value(key: str):
-                value = initiative_service.find_field_value(data, key)
+                value = initiative_service.find_field_value(monster_df, key)
                 if value is None or pd.isna(value):
                     return "?"
                 return value

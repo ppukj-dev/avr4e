@@ -957,11 +957,27 @@ def register_initiative_commands(
                         if interaction.user != ctx.author:
                             await interaction.response.send_message("You cannot use this button.", ephemeral=True)
                             return
+                        sorted_init = sorted(
+                            state["combatants"].items(),
+                            key=service.sort_key(state)
+                        )
+                        remove_index = next(
+                            (i for i, (key, _) in enumerate(sorted_init)
+                             if key == target_key),
+                            None
+                        )
                         del combatants[target_key]
                         service.delete_combatant(ctx, target_key)
+                        if remove_index is not None and state.get("started", False):
+                            if remove_index < state["current_turn"]:
+                                state["current_turn"] -= 1
+                            elif remove_index == state["current_turn"]:
+                                if state["current_turn"] >= len(sorted_init) - 1:
+                                    state["current_turn"] = 0
                         await interaction.message.edit(content=f"Removed **{target_name}** from initiative.", view=None)
                         message = service.render_message(state)
                         await service.update_pinned_message(ctx, state, message)
+                        service.save_state(ctx, state)
 
                     async def cancel_callback(interaction):
                         if interaction.user != ctx.author:
@@ -1034,12 +1050,28 @@ def register_initiative_commands(
                             if interaction.user != ctx.author:
                                 await interaction.response.send_message("You cannot use this button.", ephemeral=True)
                                 return
+                            sorted_init = sorted(
+                                state["combatants"].items(),
+                                key=service.sort_key(state)
+                            )
+                            remove_index = next(
+                                (i for i, (key, _) in enumerate(sorted_init)
+                                 if key == target_key),
+                                None
+                            )
                             del combatants[target_key]
                             service.delete_combatant(ctx, target_key)
+                            if remove_index is not None and state.get("started", False):
+                                if remove_index < state["current_turn"]:
+                                    state["current_turn"] -= 1
+                                elif remove_index == state["current_turn"]:
+                                    if state["current_turn"] >= len(sorted_init) - 1:
+                                        state["current_turn"] = 0
                             await interaction.message.edit(content=f"Removed **{target_name}** from initiative.", view=None)
                             message = service.render_message(state)
                             await service.update_pinned_message(ctx, state, message)
                             del state["pending_remove"]
+                            service.save_state(ctx, state)
 
                         async def cancel_callback(interaction):
                             if interaction.user != ctx.author:
