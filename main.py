@@ -224,12 +224,16 @@ async def help(ctx):
     desc += "\n"
     desc += "### Initiative\n"
     desc += f"- Begin tracker: `{prefix}i begin`\n"
+    desc += f"- Show tracker: `{prefix}i`\n"
     desc += f"- Join with sheet: `{prefix}i join`\n"
     desc += "  - Can also join using check roll for both monster and player.\n"
     desc += f"- Add manual: `{prefix}i add <name> <mod>` or `{prefix}i add <name> -p <value>`\n"
     desc += f"- Edit initiative position: `{prefix}i edit <name>`\n"
-    desc += f"- Next turn: `{prefix}i next`\n"
+    desc += f"- Remove combatant: `{prefix}i remove <name>`\n"
+    desc += f"- Next/Prev turn: `{prefix}i next` / `{prefix}i prev`\n"
+    desc += f"- HP tracking: `{prefix}i hp <name> <amount>` or `{prefix}i hp <name> <amount>t`\n"
     desc += f"- End tracker: `{prefix}i end`\n"
+    desc += f"- More details: `{prefix}i help`\n"
     desc += f"- Monster check name override: `{prefix}mc <check> -name <name>`\n"
     desc += "\n"
     desc += "### Monsters\n"
@@ -865,8 +869,11 @@ def create_action_result_embed(
             damage_result = d20.roll(expression)
             crit_expression = crit_damage_expression(expression) + critdie
             crit_result = d20.roll(crit_expression)
+    hp_footer_entries = []
     for target in ap.targets:
         meta = ""
+        hit_success = None
+        auto_hit = not to_hit or not def_target
         if not ap.is_critical and to_hit:
             if to_hit[0] == "d":
                 to_hit = "1"+to_hit
@@ -888,11 +895,14 @@ def create_action_result_embed(
                     if kept_values and 1 in kept_values:
                         status = "**MISS** (natural 1)"
                         suffix = f" ({status})"
+                        hit_success = False
                     else:
                         if defense_value == 0 or hit_result.total >= defense_value:
                             status = "**HIT**"
+                            hit_success = True
                         else:
                             status = "**MISS**"
+                            hit_success = False
                         suffix = f" ({status} vs {defense_value})"
             meta += f"**{hit_description}**: {hit_result}{suffix}\n"
         if damage and not is_aoe(range):
@@ -902,11 +912,37 @@ def create_action_result_embed(
                 expression = crit_damage_expression(expression) + critdie
             damage_result = d20.roll(expression)
             meta += f"**Damage**: {damage_result}\n"
+            if ctx and (auto_hit or hit_success):
+                updated = apply_hp_change(ctx, target.name, damage_result.total)
+                if updated and updated.get("max_hp") is not None:
+                    hp_line = f"HP: {updated['current_hp']}/{updated['max_hp']}"
+                    temp_hp = updated.get("temp_hp") or 0
+                    if temp_hp > 0:
+                        hp_line += f" (+{temp_hp} temp)"
+                    meta += f"**{hp_line}**\n"
+                    footer_line = f"{target.name}: {updated['current_hp']}/{updated['max_hp']}"
+                    temp_hp = updated.get("temp_hp") or 0
+                    if temp_hp > 0:
+                        footer_line += f" {temp_hp}T"
+                    hp_footer_entries.append(footer_line)
         elif damage and is_aoe(range):
             aoedamage = damage_result
             if ap.is_critical or (to_hit and hit_result.crit == 1):
                 aoedamage = crit_result
             meta += f"**Damage**: {aoedamage}\n"
+            if ctx and (auto_hit or hit_success):
+                updated = apply_hp_change(ctx, target.name, aoedamage.total)
+                if updated and updated.get("max_hp") is not None:
+                    hp_line = f"HP: {updated['current_hp']}/{updated['max_hp']}"
+                    temp_hp = updated.get("temp_hp") or 0
+                    if temp_hp > 0:
+                        hp_line += f" (+{temp_hp} temp)"
+                    meta += f"**{hp_line}**\n"
+                    footer_line = f"{target.name}: {updated['current_hp']}/{updated['max_hp']}"
+                    temp_hp = updated.get("temp_hp") or 0
+                    if temp_hp > 0:
+                        footer_line += f" {temp_hp}T"
+                    hp_footer_entries.append(footer_line)
         if to_hit or damage:
             embed.add_field(name=target.name, value=meta, inline=False)
     if flavor:
@@ -917,6 +953,9 @@ def create_action_result_embed(
         embed.set_image(url=image)
     if ap.thumbnail:
         embed.set_thumbnail(url=ap.thumbnail)
+
+    if hp_footer_entries:
+        embed.set_footer(text=" | ".join(hp_footer_entries))
 
     embed.description = embed_description
     return embed
@@ -945,11 +984,16 @@ async def check(ctx: commands.Context, *, args=None):
                 if value is None or pd.isna(value):
                     return "?"
                 return value
+            hp_raw = initiative_service.find_field_value_case_sensitive(data, "HP")
+            max_hp = initiative_service.parse_hp_value(hp_raw)
             stats = {
                 "ac": _stat_value("AC"),
                 "fort": _stat_value("FORT"),
                 "ref": _stat_value("REF"),
-                "will": _stat_value("WILL")
+                "will": _stat_value("WILL"),
+                "max_hp": max_hp,
+                "current_hp": max_hp if max_hp is not None else None,
+                "temp_hp": 0 if max_hp is not None else None
             }
             footer = await initiative_service.maybe_join_from_check(
                 ctx, name, results, modifier_value, source="player", stats=stats)
@@ -1128,6 +1172,92 @@ def get_initiative_defense(
     if "will" in def_key:
         return parse_defense_value(combatant.get("will"))
     return None
+
+
+def get_initiative_combatant(ctx: commands.Context, target_name: str):
+    if not initiative_service or not ctx:
+        return None
+    state = initiative_service.load_state(ctx)
+    if not state.get("active"):
+        return None
+    name_key = initiative_service.normalize_name(target_name)
+    return state["combatants"].get(name_key)
+
+
+def apply_temp_hp(current_temp: int, new_temp: int) -> int:
+    if new_temp is None:
+        return current_temp
+    if current_temp is None:
+        return new_temp
+    return max(current_temp, new_temp)
+
+
+def apply_hp_damage(combatant: dict, damage: int) -> None:
+    if damage is None:
+        return
+    max_hp = combatant.get("max_hp")
+    current_hp = combatant.get("current_hp")
+    temp_hp = combatant.get("temp_hp") or 0
+    if max_hp is None or current_hp is None:
+        return
+    remaining = damage
+    if temp_hp > 0:
+        if remaining <= temp_hp:
+            temp_hp -= remaining
+            remaining = 0
+        else:
+            remaining -= temp_hp
+            temp_hp = 0
+    current_hp -= remaining
+    combatant["current_hp"] = current_hp
+    combatant["temp_hp"] = temp_hp
+
+
+def apply_hp_heal(combatant: dict, amount: int) -> None:
+    if amount is None:
+        return
+    max_hp = combatant.get("max_hp")
+    current_hp = combatant.get("current_hp")
+    if max_hp is None or current_hp is None:
+        return
+    if current_hp < 0:
+        current_hp = 0
+    current_hp += amount
+    if current_hp > max_hp:
+        current_hp = max_hp
+    combatant["current_hp"] = current_hp
+
+
+def apply_hp_change(
+        ctx: commands.Context,
+        target_name: str,
+        amount: int
+        ) -> dict:
+    if amount is None or not initiative_service:
+        return None
+    state = initiative_service.load_state(ctx)
+    combatant = get_initiative_combatant(ctx, target_name)
+    if not combatant:
+        return None
+    if amount < 0:
+        apply_hp_heal(combatant, abs(amount))
+    elif amount > 0:
+        apply_hp_damage(combatant, amount)
+    initiative_service.save_combatant(
+        ctx,
+        initiative_service.normalize_name(target_name),
+        combatant
+    )
+    if state:
+        message = initiative_service.render_message(state)
+        try:
+            asyncio.create_task(
+                initiative_service.update_pinned_message(ctx, state, message)
+            )
+        except RuntimeError:
+            pass
+        initiative_service.save_state(ctx, state)
+    return combatant
 
 
 def get_spreadsheet_id(url: str):
@@ -2623,11 +2753,16 @@ async def monster_check(ctx: commands.Context, *, args=None):
                 if value is None or pd.isna(value):
                     return "?"
                 return value
+            hp_raw = initiative_service.find_field_value_case_sensitive(monster_df, "HP")
+            max_hp = initiative_service.parse_hp_value(hp_raw)
             stats = {
                 "ac": _stat_value("AC"),
                 "fort": _stat_value("FORT"),
                 "ref": _stat_value("REF"),
-                "will": _stat_value("WILL")
+                "will": _stat_value("WILL"),
+                "max_hp": max_hp,
+                "current_hp": max_hp if max_hp is not None else None,
+                "temp_hp": 0 if max_hp is not None else None
             }
             base_name = ap.name_override or monster_name
             footer = await initiative_service.maybe_join_from_check(

@@ -545,12 +545,36 @@ class InitiativeRepository(Repository):
             fort VARCHAR(255),
             ref VARCHAR(255),
             will VARCHAR(255),
+            max_hp INTEGER,
+            current_hp INTEGER,
+            temp_hp INTEGER,
             author_id VARCHAR(255),
             source VARCHAR(32) NOT NULL,
             join_order INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             UNIQUE (guild_id, channel_id, name_key)
         )""")
+        try:
+            self.cursor.execute("""
+            ALTER TABLE initiative_combatants
+            ADD COLUMN max_hp INTEGER
+            """)
+        except sqlite3.OperationalError:
+            pass
+        try:
+            self.cursor.execute("""
+            ALTER TABLE initiative_combatants
+            ADD COLUMN current_hp INTEGER
+            """)
+        except sqlite3.OperationalError:
+            pass
+        try:
+            self.cursor.execute("""
+            ALTER TABLE initiative_combatants
+            ADD COLUMN temp_hp INTEGER
+            """)
+        except sqlite3.OperationalError:
+            pass
         self.cursor.close()
         self.connection.close()
 
@@ -633,6 +657,9 @@ class InitiativeRepository(Repository):
             fort,
             ref,
             will,
+            max_hp,
+            current_hp,
+            temp_hp,
             author_id,
             source,
             join_order,
@@ -664,6 +691,9 @@ class InitiativeRepository(Repository):
             fort,
             ref,
             will,
+            max_hp,
+            current_hp,
+            temp_hp,
             author_id,
             source,
             join_order,
@@ -691,6 +721,9 @@ class InitiativeRepository(Repository):
             fort: str,
             ref: str,
             will: str,
+            max_hp: int,
+            current_hp: int,
+            temp_hp: int,
             author_id: str,
             source: str,
             join_order: int
@@ -707,12 +740,15 @@ class InitiativeRepository(Repository):
             fort,
             ref,
             will,
+            max_hp,
+            current_hp,
+            temp_hp,
             author_id,
             source,
             join_order,
             created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (guild_id, channel_id, name_key)
             DO UPDATE SET
                 name = ?,
@@ -722,6 +758,9 @@ class InitiativeRepository(Repository):
                 fort = ?,
                 ref = ?,
                 will = ?,
+                max_hp = ?,
+                current_hp = ?,
+                temp_hp = ?,
                 author_id = ?,
                 source = ?,
                 join_order = ?
@@ -731,8 +770,10 @@ class InitiativeRepository(Repository):
         with self as db:
             db.cursor.execute(query, (
                 guild_id, channel_id, name, name_key, initiative, modifier,
-                ac, fort, ref, will, author_id, source, join_order, now,
+                ac, fort, ref, will, max_hp, current_hp, temp_hp,
+                author_id, source, join_order, now,
                 name, initiative, modifier, ac, fort, ref, will,
+                max_hp, current_hp, temp_hp,
                 author_id, source, join_order))
             db.connection.commit()
 

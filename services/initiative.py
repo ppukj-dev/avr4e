@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import io
+import re
 import d20
 import pandas as pd
 import discord
@@ -75,6 +76,9 @@ class InitiativeService:
                             fort,
                             ref,
                             will,
+                            max_hp,
+                            current_hp,
+                            temp_hp,
                             author_id,
                             source,
                             join_order,
@@ -88,6 +92,9 @@ class InitiativeService:
                             "fort": fort,
                             "ref": ref,
                             "will": will,
+                            "max_hp": max_hp,
+                            "current_hp": current_hp,
+                            "temp_hp": temp_hp,
                             "author_id": author_id,
                             "source": source,
                             "join_order": join_order,
@@ -126,6 +133,9 @@ class InitiativeService:
             str(data.get("fort", "?")),
             str(data.get("ref", "?")),
             str(data.get("will", "?")),
+            data.get("max_hp"),
+            data.get("current_hp"),
+            data.get("temp_hp"),
             str(data.get("author_id", "")),
             data.get("source", "manual"),
             int(data.get("join_order", 0))
@@ -199,8 +209,11 @@ class InitiativeService:
             fort: str,
             ref: str,
             will: str,
-            author_id: str,
-            source: str
+            max_hp: int = None,
+            current_hp: int = None,
+            temp_hp: int = None,
+            author_id: str = "",
+            source: str = "manual"
             ) -> dict:
         name_key = self.normalize_name(name)
         existing = state["combatants"].get(name_key)
@@ -209,6 +222,14 @@ class InitiativeService:
         else:
             join_order = state["next_join_order"]
             state["next_join_order"] += 1
+        if existing:
+            if max_hp is None:
+                max_hp = existing.get("max_hp")
+            if current_hp is None:
+                current_hp = existing.get("current_hp")
+            if temp_hp is None:
+                temp_hp = existing.get("temp_hp")
+
         data = {
             "name": name,
             "initiative": int(initiative),
@@ -217,6 +238,9 @@ class InitiativeService:
             "fort": fort,
             "ref": ref,
             "will": will,
+            "max_hp": max_hp,
+            "current_hp": current_hp,
+            "temp_hp": temp_hp,
             "author_id": author_id,
             "source": source,
             "join_order": join_order,
@@ -266,9 +290,17 @@ class InitiativeService:
             ref = combatant.get("ref", "?")
             will = combatant.get("will", "?")
             initiative_score = str(combatant["initiative"]).rjust(max_init_width)
+            hp_segment = ""
+            max_hp = combatant.get("max_hp")
+            current_hp = combatant.get("current_hp")
+            temp_hp = combatant.get("temp_hp")
+            if max_hp is not None and current_hp is not None:
+                hp_segment = f" HP{current_hp}/{max_hp}"
+                if temp_hp and temp_hp > 0:
+                    hp_segment += f" +{temp_hp}T"
             core = (
                 f"{initiative_score} : {display_name} "
-                f"(AC{ac} F{fort} R{ref} W{will})"
+                f"(AC{ac} F{fort} R{ref} W{will}){hp_segment}"
             )
             if current_name_key == name_key:
                 lines.append(f"> {core}")
@@ -328,13 +360,16 @@ class InitiativeService:
                 stats.get("fort", "?"),
                 stats.get("ref", "?"),
                 stats.get("will", "?"),
+                stats.get("max_hp"),
+                stats.get("current_hp"),
+                stats.get("temp_hp"),
                 str(ctx.author.id),
                 source
             )
             joined.append(f"{base_name} {result.total}")
         else:
             for idx, result in enumerate(results, 1):
-                name = f"{base_name} {idx}"
+                name = f"{base_name}{idx}"
                 self.upsert_combatant_state(
                     ctx,
                     state,
@@ -345,6 +380,9 @@ class InitiativeService:
                     stats.get("fort", "?"),
                     stats.get("ref", "?"),
                     stats.get("will", "?"),
+                    stats.get("max_hp"),
+                    stats.get("current_hp"),
+                    stats.get("temp_hp"),
                     str(ctx.author.id),
                     source
                 )
@@ -375,6 +413,73 @@ class InitiativeService:
             return matches['value'].iloc[0]
         return None
 
+    def find_field_value_case_sensitive(self, data: pd.DataFrame, key: str):
+        if data is None or data.empty:
+            return None
+        if 'field_name' not in data.columns or 'value' not in data.columns:
+            return None
+        matches = data[data['field_name'].str.contains(key, case=True, na=False)]
+        if len(matches.index) > 0:
+            return matches['value'].iloc[0]
+        return None
+
+    def parse_hp_value(self, value):
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            match = re.search(r"\d+", value)
+            return int(match.group()) if match else None
+        try:
+            return int(value)
+        except Exception:
+            return None
+
+    @staticmethod
+    def apply_temp_hp(current_temp: int, new_temp: int) -> int:
+        if new_temp is None:
+            return current_temp
+        if current_temp is None:
+            return new_temp
+        return max(current_temp, new_temp)
+
+    @staticmethod
+    def apply_hp_damage(combatant: dict, damage: int) -> None:
+        if damage is None:
+            return
+        max_hp = combatant.get("max_hp")
+        current_hp = combatant.get("current_hp")
+        temp_hp = combatant.get("temp_hp") or 0
+        if max_hp is None or current_hp is None:
+            return
+        remaining = damage
+        if temp_hp > 0:
+            if remaining <= temp_hp:
+                temp_hp -= remaining
+                remaining = 0
+            else:
+                remaining -= temp_hp
+                temp_hp = 0
+        current_hp -= remaining
+        combatant["current_hp"] = current_hp
+        combatant["temp_hp"] = temp_hp
+
+    @staticmethod
+    def apply_hp_heal(combatant: dict, amount: int) -> None:
+        if amount is None:
+            return
+        max_hp = combatant.get("max_hp")
+        current_hp = combatant.get("current_hp")
+        if max_hp is None or current_hp is None:
+            return
+        if current_hp < 0:
+            current_hp = 0
+        current_hp += amount
+        if current_hp > max_hp:
+            current_hp = max_hp
+        combatant["current_hp"] = current_hp
+
 
 def register_initiative_commands(
         bot: commands.Bot,
@@ -382,6 +487,71 @@ def register_initiative_commands(
         init_repo
         ) -> InitiativeService:
     service = InitiativeService(bot, init_repo)
+
+    def format_hp_summary(combatant: dict) -> str:
+        max_hp = combatant.get("max_hp")
+        current_hp = combatant.get("current_hp")
+        temp_hp = combatant.get("temp_hp") or 0
+        if max_hp is None or current_hp is None:
+            return ""
+        line = f"HP: {current_hp}/{max_hp}"
+        if temp_hp > 0:
+            line += f" (+{temp_hp} temp)"
+        return line
+
+    async def resolve_combatant_choice(
+            ctx: commands.Context,
+            state: dict,
+            partial_name: str,
+            action_label: str
+            ):
+        combatants = state["combatants"]
+        matches = service.find_matching_combatants(combatants, partial_name)
+        if not matches:
+            await ctx.send(f"No combatant matching '{partial_name}' found.")
+            return None
+        if len(matches) == 1:
+            return matches[0][0]
+
+        embed = discord.Embed(
+            title="Multiple matches found",
+            description=f"Which combatant do you want to {action_label}?"
+        )
+        limited_matches = matches[:10]
+        choices = "\n".join(
+            f"{i}. {combatant_name}"
+            for i, (_, combatant_name) in enumerate(limited_matches, 1)
+        )
+        embed.description = (
+            f"Which combatant do you want to {action_label}?\n{choices}"
+        )
+        embed.set_footer(
+            text="Reply with the number of the combatant you want.")
+        prompt_message = await ctx.send(embed=embed)
+
+        def check(m):
+            return (
+                m.author.id == ctx.author.id
+                and m.channel.id == ctx.channel.id
+                and m.content.isdigit()
+            )
+
+        try:
+            msg = await bot.wait_for("message", check=check, timeout=30.0)
+            index = int(msg.content) - 1
+            if index < 0 or index >= len(limited_matches):
+                await ctx.send("Invalid selection number.")
+                await prompt_message.delete()
+                await msg.delete()
+                return None
+            matched_key = limited_matches[index][0]
+            await prompt_message.delete()
+            await msg.delete()
+            return matched_key
+        except asyncio.TimeoutError:
+            await ctx.send("No response received. Selection cancelled.")
+            await prompt_message.delete()
+            return None
 
     async def prompt_reorder_position(
             ctx: commands.Context,
@@ -469,8 +639,7 @@ def register_initiative_commands(
             description=(
                 f"{ctx.author.mention} reordering **{combatants[target_key]['name']}**.\n"
                 "Choose from the dropdown or reply with an initiative value."
-            ),
-            color=discord.Color.blue()
+            )
         )
         embed.set_footer(text="Reply with a number to set initiative directly.")
         prompt_message = await ctx.send(embed=embed, view=view)
@@ -586,6 +755,32 @@ def register_initiative_commands(
                 await ctx.send(message)
                 return
 
+            if args[0] == "help":
+                embed = discord.Embed()
+                embed.title = "Initiative Help"
+                prefix = ctx.prefix
+                lines = []
+                lines.append(f"- Start tracker: `{prefix}i begin`")
+                lines.append(f"- Show tracker: `{prefix}i`")
+                lines.append(f"- Join with sheet: `{prefix}i join`")
+                lines.append(f"- Add manual: `{prefix}i add <name> <mod>` or `{prefix}i add <name> -p <value>`")
+                lines.append(f"- Edit: `{prefix}i edit <name>`")
+                lines.append(f"- Remove: `{prefix}i remove <name>`")
+                lines.append(f"- Next/Prev turn: `{prefix}i next` / `{prefix}i prev`")
+                lines.append(f"- End tracker: `{prefix}i end`")
+                lines.append("")
+                lines.append("HP tracking:")
+                lines.append(f"- Modify HP: `{prefix}i hp <name> <amount>` (positive heal, negative damage)")
+                lines.append(f"- Temp HP: `{prefix}i hp <name> <amount>t`")
+                lines.append(f"- Set HP: `{prefix}i hp set <name> <current> [max] [temp]`")
+                lines.append(f"- Show HP: `{prefix}i hp show <name>`")
+                lines.append("")
+                lines.append(f"- Join via checks: `{prefix}c Initiative` or `{prefix}c <skill> -init`")
+                lines.append(f"- Monster initiative: `{prefix}mc Initiative` or `{prefix}mc <check> -init`")
+                embed.description = "\n".join(lines)
+                await ctx.send(embed=embed)
+                return
+
             if args[0] == "begin":
                 state = service.init_state_default()
                 state["active"] = True
@@ -635,6 +830,10 @@ def register_initiative_commands(
                 fort = service.find_field_value(data, "FORT")
                 ref = service.find_field_value(data, "REF")
                 will = service.find_field_value(data, "WILL")
+                hp_raw = service.find_field_value_case_sensitive(data, "HP")
+                max_hp = service.parse_hp_value(hp_raw)
+                current_hp = max_hp if max_hp is not None else None
+                temp_hp = 0 if max_hp is not None else None
 
                 if any(pd.isna(val) for val in (name, init_bonus, ac, fort, ref, will)):
                     await ctx.send(
@@ -687,6 +886,9 @@ def register_initiative_commands(
                         fort,
                         ref,
                         will,
+                        max_hp,
+                        current_hp,
+                        temp_hp,
                         str(ctx.author.id),
                         "player"
                     )
@@ -744,6 +946,9 @@ def register_initiative_commands(
                         fort,
                         ref,
                         will,
+                        None,
+                        None,
+                        None,
                         str(author_id),
                         "enemy"
                     )
@@ -756,6 +961,125 @@ def register_initiative_commands(
                     service.save_state(ctx, state)
                 except ValueError:
                     await ctx.send("Initiative must be a number")
+
+            elif args[0] == "hp":
+                if len(args) < 2:
+                    await ctx.send(
+                        "Usage:\n"
+                        f" • {ctx.prefix}i hp <combatant> <amount>\n"
+                        f" • {ctx.prefix}i hp <combatant> <amount>t\n"
+                        f" • {ctx.prefix}i hp set <combatant> <current> [max] [temp]\n"
+                        f" • {ctx.prefix}i hp show <combatant>\n"
+                        "Notes: positive amount = heal, negative = damage. "
+                        "Append 't' for temp HP."
+                    )
+                    return
+                if len(args) < 3:
+                    await ctx.send(
+                        f"Usage: {ctx.prefix}i hp <combatant> <amount>"
+                    )
+                    return
+
+                action = args[1].casefold()
+                action_is_set = action == "set"
+                action_is_show = action == "show"
+                if action_is_set or action_is_show:
+                    partial_name = args[2]
+                else:
+                    partial_name = args[1]
+
+                action_label = "view HP for" if action_is_show else "update HP for"
+                matched_key = await resolve_combatant_choice(
+                    ctx,
+                    state,
+                    partial_name,
+                    action_label
+                )
+                if not matched_key:
+                    return
+
+                combatant = state["combatants"][matched_key]
+                if action_is_show:
+                    summary = format_hp_summary(combatant)
+                    if summary:
+                        await ctx.send(f"**{combatant['name']}** {summary}")
+                    else:
+                        await ctx.send(
+                            f"No HP tracked for **{combatant['name']}**."
+                        )
+                    return
+
+                if action_is_set:
+                    if len(args) < 4:
+                        await ctx.send(
+                            f"Usage: {ctx.prefix}i hp set <combatant> <current> [max] [temp]"
+                        )
+                        return
+                    try:
+                        current_hp = int(args[3])
+                        max_hp = int(args[4]) if len(args) > 4 else None
+                        temp_hp = int(args[5]) if len(args) > 5 else None
+                    except ValueError:
+                        await ctx.send("HP values must be integers.")
+                        return
+                    if temp_hp is not None and temp_hp < 0:
+                        await ctx.send("Temp HP cannot be negative.")
+                        return
+                    if max_hp is None:
+                        max_hp = combatant.get("max_hp")
+                        if max_hp is None:
+                            max_hp = current_hp
+                    if max_hp is not None and current_hp > max_hp:
+                        current_hp = max_hp
+                    if temp_hp is None:
+                        temp_hp = combatant.get("temp_hp")
+                        if temp_hp is None:
+                            temp_hp = 0
+                    combatant["max_hp"] = max_hp
+                    combatant["current_hp"] = current_hp
+                    combatant["temp_hp"] = temp_hp
+                else:
+                    amount_token = args[2] if not action_is_set and not action_is_show else args[3]
+                    is_temp = amount_token.lower().endswith("t")
+                    if is_temp:
+                        amount_token = amount_token[:-1]
+                    if not amount_token:
+                        await ctx.send("Amount must be an integer.")
+                        return
+                    try:
+                        amount = int(amount_token)
+                    except ValueError:
+                        await ctx.send("Amount must be an integer.")
+                        return
+                    if is_temp and amount < 0:
+                        await ctx.send("Temp HP cannot be negative.")
+                        return
+
+                    if combatant.get("max_hp") is None or combatant.get("current_hp") is None:
+                        await ctx.send(
+                            f"No HP tracked for **{combatant['name']}**. Use {ctx.prefix}i hp set first."
+                        )
+                        return
+
+                    if is_temp:
+                        temp_hp = combatant.get("temp_hp") or 0
+                        combatant["temp_hp"] = service.apply_temp_hp(temp_hp, amount)
+                    elif amount > 0:
+                        service.apply_hp_heal(combatant, amount)
+                    elif amount < 0:
+                        service.apply_hp_damage(combatant, abs(amount))
+
+                service.save_combatant(ctx, matched_key, combatant)
+                message = service.render_message(state)
+                await service.update_pinned_message(ctx, state, message)
+                service.save_state(ctx, state)
+                summary = format_hp_summary(combatant)
+                if summary:
+                    await ctx.send(f"Updated **{combatant['name']}** → {summary}")
+                else:
+                    await ctx.send(
+                        f"Updated HP for **{combatant['name']}**."
+                    )
 
             elif args[0] == "edit":
                 if len(args) < 2:
@@ -789,8 +1113,7 @@ def register_initiative_commands(
 
                     embed = discord.Embed(
                         title="Multiple matches found",
-                        description="Which combatant are you trying to edit?",
-                        color=discord.Color.red()
+                        description="Which combatant are you trying to edit?"
                     )
                     limited_matches = matches[:10]
                     choices = "\n".join(
@@ -871,6 +1194,9 @@ def register_initiative_commands(
                     fort,
                     ref,
                     will,
+                    None,
+                    None,
+                    None,
                     author_id,
                     source
                 )
@@ -969,12 +1295,14 @@ def register_initiative_commands(
                         del combatants[target_key]
                         service.delete_combatant(ctx, target_key)
                         if remove_index is not None and state.get("started", False):
-                            if remove_index < state["current_turn"]:
-                                state["current_turn"] -= 1
-                            elif remove_index == state["current_turn"]:
-                                if state["current_turn"] >= len(sorted_init) - 1:
-                                    state["current_turn"] = 0
-                        await interaction.message.edit(content=f"Removed **{target_name}** from initiative.", view=None)
+                            if remove_index <= state["current_turn"]:
+                                state["current_turn"] = max(
+                                    0, state["current_turn"] - 1
+                                )
+                        await interaction.message.edit(
+                            content=f"Removed **{target_name}** from initiative.",
+                            view=None
+                        )
                         message = service.render_message(state)
                         await service.update_pinned_message(ctx, state, message)
                         service.save_state(ctx, state)
@@ -999,8 +1327,7 @@ def register_initiative_commands(
 
                     embed = discord.Embed(
                         title="Multiple matches found",
-                        description="Which combatant are you trying to remove?",
-                        color=discord.Color.red()
+                        description="Which combatant are you trying to remove?"
                     )
                     limited_matches = matches[:10]
                     choices = "\n".join(
@@ -1062,11 +1389,10 @@ def register_initiative_commands(
                             del combatants[target_key]
                             service.delete_combatant(ctx, target_key)
                             if remove_index is not None and state.get("started", False):
-                                if remove_index < state["current_turn"]:
-                                    state["current_turn"] -= 1
-                                elif remove_index == state["current_turn"]:
-                                    if state["current_turn"] >= len(sorted_init) - 1:
-                                        state["current_turn"] = 0
+                                if remove_index <= state["current_turn"]:
+                                    state["current_turn"] = max(
+                                        0, state["current_turn"] - 1
+                                    )
                             await interaction.message.edit(content=f"Removed **{target_name}** from initiative.", view=None)
                             message = service.render_message(state)
                             await service.update_pinned_message(ctx, state, message)
