@@ -1442,21 +1442,21 @@ times = [
 
 
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2026, 1, 3, 1, 0, 0, tzinfo=utc)
+    start_date = datetime.datetime(2026, 4, 14, 1, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     if now < start_date:
         now = start_date - datetime.timedelta(days=1)
     delta = now - start_date
     total_sessions = 1 + int(delta.total_seconds() // (60 * 60 * 24))
     date = get_in_game_date(total_sessions)
-    chapter_number = max(total_sessions - 1, 0) // 7 + 1
+    chapter_number = max(total_sessions - 1, 0) // 28 + 1
     session_number = f"{total_sessions:02}"
     calendar_name = f"{chapter_number}.{session_number} - {date}"
     return calendar_name
 
 
 async def update_calendar():
-    channel_calendar = bot.get_channel(1446506930976723095)
+    channel_calendar = bot.get_channel(1485219803542192128)
     channel_name = f"📅 {get_calendar_name()}"
     print(channel_name)
     try:
@@ -1515,9 +1515,9 @@ async def update_ds(guild_id: int):
 @tasks.loop(time=times)
 async def daily_task_run():
     await update_calendar()
-    bot_dump_channel = bot.get_channel(1443893527636348958)
+    bot_dump_channel = bot.get_channel(1485219803693191377)
     try:
-        await update_ds(1443823337980563507)
+        await update_ds(1485219802782896261)
     except Exception:
         await bot_dump_channel.send(
             "Error updating downtime. Please check the downtime sheet."
@@ -1528,23 +1528,23 @@ async def daily_task_run():
 
 def get_in_game_date(week_number):
     months = [
-        "Uno", "Tweyen", "Threo", "Quatro",
-        "Fif", "Seox", "Siete", "Eachta",
-        "Niyon", "Tien"
+        "4", "5", "6", "7",
+        "8", "9", "10", "11",
+        "12", "1", "2", "3"
     ]
 
-    season_emojis = {
-        "Fif": "☀️", "Seox": "☀️",
-        "Siete": "🍂", "Echta": "🍂", "Niyon": "🍂",
-        "Tien": "❄️", "Uno": "❄️", "Tweyen": "❄️",
-        "Threo": "🌸", "Quatro": "🌸"
-    }
+    # season_emojis = {
+    #     "Fif": "☀️", "Seox": "☀️",
+    #     "Siete": "🍂", "Echta": "🍂", "Niyon": "🍂",
+    #     "Tien": "❄️", "Uno": "❄️", "Tweyen": "❄️",
+    #     "Threo": "🌸", "Quatro": "🌸"
+    # }
 
     month_index = (week_number - 1) // 4 % 10
-    week_label = f"Week {((week_number - 1) % 4) + 1}"
+    week_label = f"W{((week_number - 1) % 4) + 1}"
     month = months[month_index]
-    emoji = season_emojis.get(month, "")
-    return f"{week_label} {month} {emoji}"
+    # emoji = season_emojis.get(month, "")
+    return f"{week_label} of Month {month}"
 
 
 def two_digit(number: int):
@@ -1795,15 +1795,16 @@ async def downtime(ctx: commands.Context, *, args=None):
         if 'userID' in sheet_df.columns:
             sheet_df = sheet_df[sheet_df['userID'] != f"<@{ctx.author.id}>"]
 
-        if args is None:
-            await multi_downtime(
-                ctx,
-                sheet_df,
-                url,
-                spreadsheet_id
-            )
-            return
-        else:
+        # if args is None:
+        #     await multi_downtime(
+        #         ctx,
+        #         sheet_df,
+        #         url,
+        #         spreadsheet_id
+        #     )
+        #     return
+        # else:
+        if args is not None:
             if re.search(r'<@\d+>', args):
                 filter_by_user_id = args
             else:
