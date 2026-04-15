@@ -1442,7 +1442,7 @@ times = [
 
 
 def get_calendar_name() -> str:
-    start_date = datetime.datetime(2026, 4, 14, 1, 0, 0, tzinfo=utc)
+    start_date = datetime.datetime(2026, 4, 11, 1, 0, 0, tzinfo=utc)
     now = datetime.datetime.now(utc)
     if now < start_date:
         now = start_date - datetime.timedelta(days=1)
