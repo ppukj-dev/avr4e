@@ -22,6 +22,7 @@ from repository import MonsterListRepository
 from repository import MonstersUserMapRepository
 from repository import BetaEventMapRepository
 from repository import InitiativeRepository
+from repository import LeaderboardRepository
 from dnd_xml_parser import read_character_file, character_to_excel
 import constant
 from pagination import Paginator
@@ -2959,6 +2960,88 @@ def create_beta_log_df(
         return False
 
 
+@bot.command(aliases=["leaderboard"])
+async def get_leaderboard(
+        ctx: commands.Context,
+        report_channel: discord.TextChannel = None,
+        url: str = ""
+        ):
+    try:
+        if url == "" and report_channel is None:
+            await ctx.send(
+                "Please provide report url",
+                " and mention a channel to listen for report.",
+                "\nFormat: `;;leaderboard #report-channel",
+                "https://docs.google.com/spreadsheets/d/your-sheet-id`"
+                )
+            return
+        spreadsheet_id = get_spreadsheet_id(url)
+        if spreadsheet_id == "":
+            await ctx.send("Please provide a url")
+            return
+        if report_channel is None:
+            await ctx.send("Please mention a channel to listen for report.")
+            return
+        statistics = get_df(spreadsheet_id, "Statistics")
+        form_responses = get_df(spreadsheet_id, "Form Responses 1")
+        statistics = statistics.sort_values(by="Playcount", ascending=False)
+        playcount_description = ""
+        for i, row in statistics.iterrows():
+            name = row["Name"].split()[0]
+            playcount = row["Playcount"]
+            username = row["ID"]
+            playcount_description += (
+                f"1. **{name}** | {username} : **{playcount}**\n"
+            )
+        playcount_embed = discord.Embed(
+            title="Play Count Leaderboard",
+            description=playcount_description,
+            color=discord.Color.gold()
+        )
+        current_unix_time = int(datetime.datetime.now().timestamp())
+        playcount_embed.description += (
+            f"\n-# Last updated: <t:{current_unix_time}:f>"
+        )
+
+        # get only the last three response in form responses
+        form_responses = form_responses.tail(3)
+        # sort decending by timestamp
+        form_responses = form_responses.sort_values(
+            by="Timestamp",
+            ascending=False
+            )
+        form_description = ""
+        for i, row in form_responses.iterrows():
+            session_dm = row["Session DM"]
+            session_code = row["Session Code"]
+            session_title = row["Session Title"]
+            form_description += (
+                f"- **{session_code} - {session_title}** | {session_dm}\n"
+            )
+        form_description += (
+            f"\n-# Last updated: <t:{current_unix_time}:f>"
+        )
+        form_embed = discord.Embed(
+            title="Recent Session Submissions",
+            description=form_description,
+            color=discord.Color.blue()
+        )
+        playcount_id = await ctx.send(embed=playcount_embed)
+        latest_id = await ctx.send(embed=form_embed)
+        leaderboardRepo.set_leaderboard_data(
+            guild_id=ctx.guild.id,
+            playcount_message_id=playcount_id.id,
+            latest_session_message_id=latest_id.id,
+            report_channel_id=report_channel.id,
+            sheet_url=url
+        )
+
+    except PermissionError:
+        await ctx.send("Error. Please check your sheet permission.")
+    except Exception as e:
+        print(e, traceback.format_exc())
+        await ctx.send("Error. Please check input again.")
+
 
 if __name__ == "__main__":
     charaRepo = CharacterUserMapRepository()
@@ -2967,6 +3050,7 @@ if __name__ == "__main__":
     monsterRepo = MonsterListRepository()
     monsterMapRepo = MonstersUserMapRepository()
     betaEventMapRepo = BetaEventMapRepository()
+    leaderboardRepo = LeaderboardRepository()
     initRepo = InitiativeRepository()
     initiative_service = register_initiative_commands(
         bot, charaRepo, initRepo)
