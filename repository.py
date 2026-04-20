@@ -826,6 +826,7 @@ class LeaderboardRepository(Repository):
         CREATE TABLE IF NOT EXISTS leaderboard (
             id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
             guild_id VARCHAR(255) NOT NULL,
+            leaderboard_channel_id VARCHAR(255) NOT NULL,
             playcount_message_id VARCHAR(255) NOT NULL,
             latest_session_message_id VARCHAR(255) NOT NULL,
             report_channel_id VARCHAR(255) NOT NULL,
@@ -843,7 +844,8 @@ class LeaderboardRepository(Repository):
             playcount_message_id,
             latest_session_message_id,
             report_channel_id,
-            sheet_url
+            sheet_url,
+            leaderboard_channel_id
         FROM leaderboard
         """
 
@@ -861,14 +863,36 @@ class LeaderboardRepository(Repository):
             playcount_message_id,
             latest_session_message_id,
             report_channel_id,
-            sheet_url
+            sheet_url,
+            leaderboard_channel_id
         FROM leaderboard
         WHERE guild_id = ?
         LIMIT 1
         """
 
         with self as db:
-            db.cursor.execute(query, (guild_id))
+            db.cursor.execute(query, (guild_id, ))
+            result = db.cursor.fetchone()
+
+        return result
+
+    def get_leaderboard_data_by_leaderboard_channel_id(self, leaderboard_channel_id: str) -> tuple:
+        query = """
+        SELECT
+            id,
+            guild_id,
+            playcount_message_id,
+            latest_session_message_id,
+            report_channel_id,
+            sheet_url,
+            leaderboard_channel_id
+        FROM leaderboard
+        WHERE leaderboard_channel_id = ?
+        LIMIT 1
+        """
+
+        with self as db:
+            db.cursor.execute(query, (leaderboard_channel_id, ))
             result = db.cursor.fetchone()
 
         return result
@@ -879,12 +903,13 @@ class LeaderboardRepository(Repository):
             playcount_message_id: str,
             latest_session_message_id: str,
             report_channel_id: str,
-            sheet_url: str
+            sheet_url: str,
+            leaderboard_channel_id: str
             ) -> None:
         query = """
         INSERT INTO leaderboard (
             guild_id, playcount_message_id, latest_session_message_id,
-            report_channel_id, sheet_url
+            report_channel_id, sheet_url, leaderboard_channel_id
         )
         VALUES (
             ?, ?, ?, ?, ?
@@ -894,14 +919,17 @@ class LeaderboardRepository(Repository):
                 playcount_message_id = ?,
                 latest_session_message_id = ?,
                 report_channel_id = ?,
-                sheet_url = ?
+                sheet_url = ?,
+                leaderboard_channel_id = ?
         """
 
         with self as db:
             db.cursor.execute(query, (guild_id, playcount_message_id,
                                       latest_session_message_id,
                                       report_channel_id, sheet_url,
+                                      leaderboard_channel_id,
                                       playcount_message_id,
                                       latest_session_message_id,
-                                      report_channel_id, sheet_url))
+                                      report_channel_id, sheet_url,
+                                      leaderboard_channel_id))
             db.connection.commit()

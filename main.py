@@ -181,6 +181,7 @@ def process_message(message: str) -> str:
 @bot.event
 async def on_ready():
     daily_task_run.start()
+    leaderboard_refresh.start()
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} commands")
@@ -1525,6 +1526,13 @@ async def daily_task_run():
         )
     await bot_dump_channel.send(
         "Done updating calendar and downtime.")
+    
+
+
+@tasks.loop(hours=8)
+async def leaderboard_refresh():
+    # TODO: Fix hardcoded guild id
+    await update_leaderboard(1485219802782896261)
 
 
 def get_in_game_date(week_number):
@@ -3041,6 +3049,78 @@ async def get_leaderboard(
     except Exception as e:
         print(e, traceback.format_exc())
         await ctx.send("Error. Please check input again.")
+
+
+async def update_leaderboard(guild_id: int):
+    data = leaderboardRepo.get_leaderboard_data(guild_id)
+    if data is None:
+        print("No leaderboard data found for this guild.")
+        return
+    spreadsheet_id = get_spreadsheet_id(data[5])
+    if spreadsheet_id == "":
+        print("No spreadsheet id found in leaderboard data.")
+        return
+    # report_channel = bot.get_channel(data[4])
+    leaderboard_channel = bot.get_channel(int(data[6]))
+    if leaderboard_channel is None:
+        print("Leaderboard channel not found.")
+        return
+    playcount_message_id = data[2]
+    latest_session_message_id = data[3]
+    playcount_message = await leaderboard_channel.fetch_message(playcount_message_id)
+    if playcount_message is None:
+        print("Playcount message not found.")
+        return
+    latest_session_message = await leaderboard_channel.fetch_message(latest_session_message_id)
+    if latest_session_message is None:
+        print("Latest session message not found.")
+        return
+    statistics = get_df(spreadsheet_id, "Statistics")
+    form_responses = get_df(spreadsheet_id, "Form Responses 1")
+    statistics = statistics.sort_values(by="Playcount", ascending=False)
+    playcount_description = ""
+    for i, row in statistics.iterrows():
+        name = row["Name"].split()[0]
+        playcount = row["Playcount"]
+        username = row["ID"]
+        playcount_description += (
+            f"1. **{name}** | {username} : **{playcount}**\n"
+        )
+    playcount_embed = discord.Embed(
+        title="Play Count Leaderboard",
+        description=playcount_description,
+        color=discord.Color.gold()
+    )
+    current_unix_time = int(datetime.datetime.now().timestamp())
+    playcount_embed.description += (
+        f"\n-# Last updated: <t:{current_unix_time}:f>"
+    )
+
+    # get only the last three response in form responses
+    form_responses = form_responses.tail(3)
+    # sort decending by timestamp
+    form_responses = form_responses.sort_values(
+        by="Timestamp",
+        ascending=False
+        )
+    form_description = ""
+    for i, row in form_responses.iterrows():
+        session_dm = row["Session DM"]
+        session_code = row["Session Code"]
+        session_title = row["Session Title"]
+        form_description += (
+            f"- **{session_code} - {session_title}** | {session_dm}\n"
+        )
+    form_description += (
+        f"\n-# Last updated: <t:{current_unix_time}:f>"
+    )
+    form_embed = discord.Embed(
+        title="Recent Session Submissions",
+        description=form_description,
+        color=discord.Color.blue()
+    )
+    await playcount_message.edit(embed=playcount_embed)
+    await latest_session_message.edit(embed=form_embed)
 
 
 if __name__ == "__main__":
