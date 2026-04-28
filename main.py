@@ -2992,14 +2992,20 @@ async def get_leaderboard(
             return
         statistics = get_df(spreadsheet_id, "Statistics")
         form_responses = get_df(spreadsheet_id, "Form Responses 1")
-        statistics = statistics.sort_values(by="Playcount", ascending=False)
+        statistics = statistics.sort_values(
+            by=["Playcount", "Name"],
+            ascending=[False, True]
+        )
         playcount_description = ""
         for i, row in statistics.iterrows():
             name = row["Name"].split()[0]
             playcount = row["Playcount"]
-            username = row["ID"]
+            inspi = row["Inspi Count"]
+            # username = row["ID"]
             playcount_description += (
-                f"1. **{name}** | {username} : **{playcount}**\n"
+                f"1. **{name}** | "
+                f"Play : **{playcount}** | "
+                f"Inspi: **{inspi}**\n"
             )
         playcount_embed = discord.Embed(
             title="Play Count Leaderboard",
@@ -3041,7 +3047,8 @@ async def get_leaderboard(
             playcount_message_id=playcount_id.id,
             latest_session_message_id=latest_id.id,
             report_channel_id=report_channel.id,
-            sheet_url=url
+            sheet_url=url,
+            leaderboard_channel_id=ctx.channel.id
         )
 
     except PermissionError:
@@ -3077,14 +3084,20 @@ async def update_leaderboard(guild_id: int):
         return
     statistics = get_df(spreadsheet_id, "Statistics")
     form_responses = get_df(spreadsheet_id, "Form Responses 1")
-    statistics = statistics.sort_values(by="Playcount", ascending=False)
+    statistics = statistics.sort_values(
+        by=["Playcount", "Name"],
+        ascending=[False, True]
+    )
     playcount_description = ""
     for i, row in statistics.iterrows():
         name = row["Name"].split()[0]
         playcount = row["Playcount"]
-        username = row["ID"]
+        inspi = row["Inspi Count"]
+        # username = row["ID"]
         playcount_description += (
-            f"1. **{name}** | {username} : **{playcount}**\n"
+            f"1. **{name}** | "
+            f"Play : **{playcount}** | "
+            f"Inspi: **{inspi}**\n"
         )
     playcount_embed = discord.Embed(
         title="Play Count Leaderboard",
